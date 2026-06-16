@@ -46,6 +46,11 @@ const (
 	feedURLTemplate  = "https://stat.ripe.net/data/country-resource-list/data.json?resource=%s&v4_format=prefix"
 )
 
+// version is overwritten at link time via `-X main.version=…` in the Makefile
+// or the release workflow. The literal "dev" is the fallback for unstamped
+// builds (e.g. `go run .`).
+var version = "dev"
+
 // Static error values let callers errors.Is them and satisfy err113.
 var (
 	errBadStatus    = errors.New("RIPE Stat status not ok")
@@ -128,6 +133,9 @@ func (f *cliFlags) markers() (string, string, string, string) {
 }
 
 func realMain() int {
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
+
 	flags := cliFlags{}
 	flag.StringVar(&flags.frrConf, "frr-conf", "/etc/frr/frr.conf", "path to FRR config")
 	flag.BoolVar(&flags.reloadOK, "reload", true, "run frr-reload on change")
@@ -142,6 +150,12 @@ func realMain() int {
 	flag.StringVar(&flags.markerPrefix, "marker-prefix", "", "marker comment prefix between BEGIN-/END- and -V4/-V6 (default <CC>-FEED)")
 	flag.StringVar(&flags.feedURL, "feed-url", "", "RIPE Stat URL (default country-resource-list for <cc>)")
 	flag.Parse()
+
+	if showVersion {
+		_, _ = fmt.Fprintln(os.Stdout, version)
+
+		return 0
+	}
 
 	flags.applyDefaults()
 

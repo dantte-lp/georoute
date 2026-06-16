@@ -1,0 +1,36 @@
+# Build artifacts
+/georoute
+/dist/
+/build/
+*.exe
+*.so
+*.dylib
+
+# Test + coverage
+*.test
+*.out
+coverage.html
+coverage.txt
+profile.cov
+
+# Go workspace files
+go.work
+go.work.sum
+
+# IDE / editor noise
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+
+# OS-level junk
+.DS_Store
+Thumbs.db
+
+# Local environment scratch
+.env
+.env.local
+*.local

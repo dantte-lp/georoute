@@ -2,10 +2,14 @@
 
 ## Reporting a vulnerability
 
-This is a private internal-infra project. If you discover a vulnerability,
-do **not** open a public issue. Send a private report to the maintainer
-listed in [MAINTAINERS](MAINTAINERS) (encrypted mail preferred — request the
-PGP key first).
+**Do not open a public issue for security bugs.** Use one of these private
+channels:
+
+1. **Preferred:** open a [private security advisory](https://github.com/dantte-lp/georoute/security/advisories/new)
+   on GitHub. This creates a confidential thread, supports private patches,
+   and issues a CVE when applicable.
+2. Alternative: email the maintainer listed in [MAINTAINERS](MAINTAINERS) —
+   encrypted mail preferred (request the PGP key first).
 
 Include in the report:
 
@@ -16,6 +20,13 @@ Include in the report:
 
 We aim to acknowledge within **3 business days** and provide a remediation
 plan within **10 business days** for high-severity issues.
+
+## Supported versions
+
+| Version | Status                                                  |
+|---------|---------------------------------------------------------|
+| 2.x     | supported                                               |
+| 1.x     | EOL — upgrade to 2.x (see [CHANGELOG.md](CHANGELOG.md)) |
 
 ## Scope
 
