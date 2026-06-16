@@ -1,12 +1,21 @@
 [Unit]
-Description=georoute — country prefix feed → FRR + nftables sync
+Description=georoute — %I country prefix feed → FRR + nftables sync
 Documentation=https://github.com/dantte-lp/georoute
 After=network-online.target frr.service
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/georoute
+EnvironmentFile=/etc/georoute/%i.env
+ExecStart=/usr/local/bin/georoute \
+    --country=${GEOROUTE_COUNTRY} \
+    --feed-url=${GEOROUTE_FEED_URL} \
+    --route-map=${GEOROUTE_ROUTE_MAP} \
+    --nft-set-v4=${GEOROUTE_NFT_SET_V4} \
+    --nft-set-v6=${GEOROUTE_NFT_SET_V6} \
+    --marker-prefix=${GEOROUTE_MARKER_PREFIX} \
+    --frr-conf=${GEOROUTE_FRR_CONF}
+TimeoutStartSec=10min
 StandardOutput=journal
 StandardError=journal
 
@@ -28,8 +37,11 @@ RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
 RestrictSUIDSGID=true
-ReadWritePaths=/etc/frr /run/frr
+ReadWritePaths=/etc/frr /run
 
 # Needs CAP_NET_ADMIN to call nft and frr-reload.py (which spawns vtysh).
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

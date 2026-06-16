@@ -1,5 +1,5 @@
 [Unit]
-Description=Periodic refresh of country prefix feed (georoute)
+Description=Periodic refresh of %I country prefix feed (georoute)
 Documentation=https://github.com/dantte-lp/georoute
 
 [Timer]
@@ -10,6 +10,7 @@ OnUnitActiveSec=12h
 RandomizedDelaySec=30min
 AccuracySec=1min
 Persistent=true
+Unit=georoute@%i.service
 
 [Install]
 WantedBy=timers.target
