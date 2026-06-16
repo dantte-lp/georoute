@@ -1,0 +1,6 @@
+# Default owner for the entire repository.
+*       @dantte-lp
+
+# Anything touching control-plane integration (FRR snippets) requires the lead.
+/deploy/examples/frr-*  @dantte-lp
+/main.go                @dantte-lp

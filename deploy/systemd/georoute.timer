@@ -1,0 +1,15 @@
+[Unit]
+Description=Periodic refresh of country prefix feed (georoute)
+Documentation=https://github.com/dantte-lp/georoute
+
+[Timer]
+# First run shortly after boot, then every 12h with a random spread
+# to avoid hammering the upstream feed source at the same instant.
+OnBootSec=5min
+OnUnitActiveSec=12h
+RandomizedDelaySec=30min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

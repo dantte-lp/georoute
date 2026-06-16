@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure
+    url: https://github.com/dantte-lp/georoute/security/policy
+    about: Do not file public issues for vulnerabilities — see SECURITY.md.

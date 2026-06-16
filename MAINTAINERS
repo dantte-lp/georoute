@@ -1,0 +1,14 @@
+# Maintainers
+
+Current maintainers and the areas they own. PRs touching an area should be
+reviewed by the listed owner.
+
+| Area                                   | Maintainer                                |
+|----------------------------------------|-------------------------------------------|
+| Project lead, releases, security mail  | Alexander Lavrukhin <admin@lavrukhin.net> |
+| Feed pipeline (fetch, aggregate)       | Alexander Lavrukhin <admin@lavrukhin.net> |
+| FRR splicer                            | Alexander Lavrukhin <admin@lavrukhin.net> |
+| nftables backend                       | Alexander Lavrukhin <admin@lavrukhin.net> |
+| Deployment artifacts (systemd, nft)    | Alexander Lavrukhin <admin@lavrukhin.net> |
+
+Security reports: see [SECURITY.md](SECURITY.md).

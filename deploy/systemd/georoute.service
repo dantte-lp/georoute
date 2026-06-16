@@ -1,0 +1,35 @@
+[Unit]
+Description=georoute — country prefix feed → FRR + nftables sync
+Documentation=https://github.com/dantte-lp/georoute
+After=network-online.target frr.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/georoute
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits — feed runs every 12h, no need for much
+MemoryHigh=128M
+MemoryMax=256M
+CPUQuota=50%
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictSUIDSGID=true
+ReadWritePaths=/etc/frr /run/frr
+
+# Needs CAP_NET_ADMIN to call nft and frr-reload.py (which spawns vtysh).
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW

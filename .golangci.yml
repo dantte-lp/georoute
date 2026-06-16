@@ -1,0 +1,60 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: all
+  disable:
+    # opinionated style I'm intentionally not adopting
+    - depguard          # no allowlist policy yet
+    - exhaustruct       # zero values are fine
+    - varnamelen        # short receiver names ok
+    - wsl              # forced empty-line rules clash with style
+    - wsl_v5
+    - nlreturn         # ditto
+    - lll              # length limits handled by reviewer eye
+    - mnd              # magic-number nitpicks for one-off CLI flags
+    - paralleltest     # no tests yet
+    - testpackage      # no tests yet
+    - gochecknoglobals # `_ = errors.New` style sentinels OK at top level
+  settings:
+    govet:
+      enable-all: true
+    gocyclo:
+      min-complexity: 25
+    cyclop:
+      max-complexity: 25
+    gocognit:
+      min-complexity: 40
+    funlen:
+      lines: 200
+      statements: 100
+    revive:
+      severity: warning
+      rules:
+        - name: exported
+        - name: unused-parameter
+          disabled: true
+    errcheck:
+      check-type-assertions: true
+      check-blank: false  # `_ = X.Close()` is the canonical intentional ignore
+    staticcheck:
+      checks:
+        - all
+    gosec:
+      excludes:
+        - G304  # we do read os.ReadFile of user-provided path; intentional
+    nakedret:
+      max-func-lines: 40
+    dupl:
+      threshold: 200
+    nestif:
+      min-complexity: 6
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gofumpt
