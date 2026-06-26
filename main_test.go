@@ -4,6 +4,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Marker constants used across splice test cases; goconst-friendly.
@@ -33,6 +34,8 @@ func TestApplyDefaults(t *testing.T) {
 				markerPrefix: "RU-FEED",
 				feedURL:      "https://stat.ripe.net/data/country-resource-list/data.json?resource=RU&v4_format=prefix",
 				lockFile:     "/run/georoute-ru.lock",
+				cacheFile:    "/var/lib/georoute/feed-ru.json.gz",
+				cacheMaxAge:  7 * 24 * time.Hour,
 			},
 		},
 		{
@@ -46,6 +49,8 @@ func TestApplyDefaults(t *testing.T) {
 				markerPrefix: "UZ-FEED",
 				feedURL:      "https://stat.ripe.net/data/country-resource-list/data.json?resource=UZ&v4_format=prefix",
 				lockFile:     "/run/georoute-uz.lock",
+				cacheFile:    "/var/lib/georoute/feed-uz.json.gz",
+				cacheMaxAge:  7 * 24 * time.Hour,
 			},
 		},
 		{
@@ -59,6 +64,8 @@ func TestApplyDefaults(t *testing.T) {
 				markerPrefix: "KZ-FEED",
 				feedURL:      "https://stat.ripe.net/data/country-resource-list/data.json?resource=KZ&v4_format=prefix",
 				lockFile:     "/run/georoute-kz.lock",
+				cacheFile:    "/var/lib/georoute/feed-kz.json.gz",
+				cacheMaxAge:  7 * 24 * time.Hour,
 			},
 		},
 	}

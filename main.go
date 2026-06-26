@@ -51,6 +51,12 @@ const (
 // builds (e.g. `go run .`).
 var version = "dev"
 
+// defaultLogf wraps log.Printf so other files can use logf without
+// importing log (and tests can stub the variable instead of the package).
+func defaultLogf(format string, args ...any) {
+	log.Printf(format, args...)
+}
+
 // Static error values let callers errors.Is them and satisfy err113.
 var (
 	errBadStatus    = errors.New("RIPE Stat status not ok")
@@ -90,6 +96,8 @@ type cliFlags struct {
 	feedURL      string
 	extrasV4File string
 	extrasV6File string
+	cacheFile    string
+	cacheMaxAge  time.Duration
 	reloadOK     bool
 	dryRun       bool
 	force        bool
@@ -120,6 +128,12 @@ func (f *cliFlags) applyDefaults() {
 	}
 	if f.lockFile == "" {
 		f.lockFile = "/run/georoute-" + ccLower + ".lock"
+	}
+	if f.cacheFile == "" {
+		f.cacheFile = "/var/lib/georoute/feed-" + ccLower + ".json.gz"
+	}
+	if f.cacheMaxAge == 0 {
+		f.cacheMaxAge = 7 * 24 * time.Hour
 	}
 }
 
@@ -153,6 +167,8 @@ func realMain() int {
 	flag.StringVar(&flags.feedURL, "feed-url", "", "RIPE Stat URL (default country-resource-list for <cc>)")
 	flag.StringVar(&flags.extrasV4File, "extras-v4-file", "", "path to operator-maintained IPv4 prefix list merged with RIPE feed (one prefix per line, # comments; empty = no extras)")
 	flag.StringVar(&flags.extrasV6File, "extras-v6-file", "", "path to operator-maintained IPv6 prefix list merged with RIPE feed (one prefix per line, # comments; empty = no extras)")
+	flag.StringVar(&flags.cacheFile, "cache-file", "", "path to gzipped JSON cache of last successful RIPE response; used as fallback on consecutive 5xx (default /var/lib/georoute/feed-<cc>.json.gz)")
+	flag.DurationVar(&flags.cacheMaxAge, "cache-max-age", 0, "maximum age of the cache file before it is refused (default 7d)")
 	flag.Parse()
 
 	if showVersion {
@@ -215,12 +231,12 @@ func acquireLock(path string) (*os.File, error) {
 func run(ctx context.Context, f cliFlags) error {
 	log.Printf("fetching RIPE Stat resources for %s", strings.ToUpper(f.country))
 
-	raw, err := fetchWithRetry(ctx, f.feedURL)
+	raw, source, err := fetchWithCache(ctx, f.feedURL, f.cacheFile, f.cacheMaxAge)
 	if err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
-	log.Printf("raw: %d v4 prefixes, %d v6 prefixes",
-		len(raw.Data.Resources.IPv4), len(raw.Data.Resources.IPv6))
+	log.Printf("raw: %d v4 prefixes, %d v6 prefixes (source=%s)",
+		len(raw.Data.Resources.IPv4), len(raw.Data.Resources.IPv6), source)
 
 	// Extras are operator-maintained prefix lists (e.g. non-RIPE-country
 	// CDN ranges). They're merged before aggregate so dedup / minimal-cover
