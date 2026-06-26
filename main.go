@@ -51,6 +51,12 @@ const (
 // builds (e.g. `go run .`).
 var version = "dev"
 
+// defaultLogf wraps log.Printf so other files can use logf without
+// importing log (and tests can stub the variable instead of the package).
+func defaultLogf(format string, args ...any) {
+	log.Printf(format, args...)
+}
+
 // Static error values let callers errors.Is them and satisfy err113.
 var (
 	errBadStatus    = errors.New("RIPE Stat status not ok")
@@ -90,6 +96,8 @@ type cliFlags struct {
 	feedURL      string
 	extrasV4File string
 	extrasV6File string
+	cacheFile    string
+	cacheMaxAge  time.Duration
 	reloadOK     bool
 	dryRun       bool
 	force        bool
@@ -120,6 +128,12 @@ func (f *cliFlags) applyDefaults() {
 	}
 	if f.lockFile == "" {
 		f.lockFile = "/run/georoute-" + ccLower + ".lock"
+	}
+	if f.cacheFile == "" {
+		f.cacheFile = "/var/lib/georoute/feed-" + ccLower + ".json.gz"
+	}
+	if f.cacheMaxAge == 0 {
+		f.cacheMaxAge = 7 * 24 * time.Hour
 	}
 }
 
@@ -153,6 +167,8 @@ func realMain() int {
 	flag.StringVar(&flags.feedURL, "feed-url", "", "RIPE Stat URL (default country-resource-list for <cc>)")
 	flag.StringVar(&flags.extrasV4File, "extras-v4-file", "", "path to operator-maintained IPv4 prefix list merged with RIPE feed (one prefix per line, # comments; empty = no extras)")
 	flag.StringVar(&flags.extrasV6File, "extras-v6-file", "", "path to operator-maintained IPv6 prefix list merged with RIPE feed (one prefix per line, # comments; empty = no extras)")
+	flag.StringVar(&flags.cacheFile, "cache-file", "", "path to gzipped JSON cache of last successful RIPE response; used as fallback on consecutive 5xx (default /var/lib/georoute/feed-<cc>.json.gz)")
+	flag.DurationVar(&flags.cacheMaxAge, "cache-max-age", 0, "maximum age of the cache file before it is refused (default 7d)")
 	flag.Parse()
 
 	if showVersion {
@@ -215,12 +231,12 @@ func acquireLock(path string) (*os.File, error) {
 func run(ctx context.Context, f cliFlags) error {
 	log.Printf("fetching RIPE Stat resources for %s", strings.ToUpper(f.country))
 
-	raw, err := fetchWithRetry(ctx, f.feedURL)
+	raw, source, err := fetchWithCache(ctx, f.feedURL, f.cacheFile, f.cacheMaxAge)
 	if err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
-	log.Printf("raw: %d v4 prefixes, %d v6 prefixes",
-		len(raw.Data.Resources.IPv4), len(raw.Data.Resources.IPv6))
+	log.Printf("raw: %d v4 prefixes, %d v6 prefixes (source=%s)",
+		len(raw.Data.Resources.IPv4), len(raw.Data.Resources.IPv6), source)
 
 	// Extras are operator-maintained prefix lists (e.g. non-RIPE-country
 	// CDN ranges). They're merged before aggregate so dedup / minimal-cover
@@ -291,21 +307,11 @@ func run(ctx context.Context, f cliFlags) error {
 		return nil
 	}
 
-	err = atomicWrite(f.frrConf, []byte(next))
+	err = applyFRRConfigOpts(ctx, f.frrConf, next, applyOpts{skipReload: !f.reloadOK})
 	if err != nil {
-		return fmt.Errorf("write frr.conf: %w", err)
+		return fmt.Errorf("apply frr.conf: %w", err)
 	}
-	log.Printf("frr.conf updated")
-
-	if !f.reloadOK {
-		return nil
-	}
-
-	err = reloadFRR(ctx, f.frrConf)
-	if err != nil {
-		return fmt.Errorf("frr-reload: %w", err)
-	}
-	log.Printf("frr-reload completed")
+	log.Printf("frr.conf updated + reloaded")
 
 	return nil
 }
@@ -648,25 +654,8 @@ func atomicWrite(path string, data []byte) error {
 	return nil
 }
 
-// reloadFRR runs frr-reload.py with a dedicated timeout. The parent ctx
-// covers the whole pipeline (5 min); reload alone gets 3 min so a slow
-// frr-reload doesn't starve the outer budget.
-func reloadFRR(parentCtx context.Context, frrConf string) error {
-	log.Printf("running frr-reload.py")
-	ctx, cancel := context.WithTimeout(parentCtx, frrReloadTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, frrReloadScript, "--reload", frrConf) //nolint:gosec // path is constant, conf is operator-supplied
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = []string{envPATH}
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("run frr-reload: %w", err)
-	}
-
-	return nil
-}
+// reloadFRR was replaced by rollback.go's applyFRRConfig pipeline. Kept
+// removed (not just deprecated) so future readers don't reach for it.
 
 func hashOf(s string) string {
 	sum := sha256.Sum256([]byte(s))
