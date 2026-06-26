@@ -307,21 +307,11 @@ func run(ctx context.Context, f cliFlags) error {
 		return nil
 	}
 
-	err = atomicWrite(f.frrConf, []byte(next))
+	err = applyFRRConfigOpts(ctx, f.frrConf, next, applyOpts{skipReload: !f.reloadOK})
 	if err != nil {
-		return fmt.Errorf("write frr.conf: %w", err)
+		return fmt.Errorf("apply frr.conf: %w", err)
 	}
-	log.Printf("frr.conf updated")
-
-	if !f.reloadOK {
-		return nil
-	}
-
-	err = reloadFRR(ctx, f.frrConf)
-	if err != nil {
-		return fmt.Errorf("frr-reload: %w", err)
-	}
-	log.Printf("frr-reload completed")
+	log.Printf("frr.conf updated + reloaded")
 
 	return nil
 }
@@ -664,25 +654,8 @@ func atomicWrite(path string, data []byte) error {
 	return nil
 }
 
-// reloadFRR runs frr-reload.py with a dedicated timeout. The parent ctx
-// covers the whole pipeline (5 min); reload alone gets 3 min so a slow
-// frr-reload doesn't starve the outer budget.
-func reloadFRR(parentCtx context.Context, frrConf string) error {
-	log.Printf("running frr-reload.py")
-	ctx, cancel := context.WithTimeout(parentCtx, frrReloadTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, frrReloadScript, "--reload", frrConf) //nolint:gosec // path is constant, conf is operator-supplied
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = []string{envPATH}
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("run frr-reload: %w", err)
-	}
-
-	return nil
-}
+// reloadFRR was replaced by rollback.go's applyFRRConfig pipeline. Kept
+// removed (not just deprecated) so future readers don't reach for it.
 
 func hashOf(s string) string {
 	sum := sha256.Sum256([]byte(s))
