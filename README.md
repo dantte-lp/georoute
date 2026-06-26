@@ -28,6 +28,34 @@ Five further flags (`--route-map`, `--nft-set-v4`, `--nft-set-v6`,
 `--marker-prefix`, `--feed-url`) are derived from the country code; override
 only when you need a non-default name (e.g. legacy `MARK-RU-EXIT`).
 
+### Operator extras
+
+Some prefixes that you want routed via the country exit are not in the RIPE
+Country Resource List feed — typically CDNs registered to a different ASN
+country (e.g. a DDoS-protection provider whose ranges serve a local CDN
+endpoint). Maintain an operator-controlled list and pass it via
+`--extras-v4-file` and/or `--extras-v6-file`:
+
+```bash
+cat > /etc/georoute/extras-ru-v4.list <<'EOF'
+# Operator-maintained additions to ru_v4 set
+# ddos-guard CDN (Belize ASN, not in RIPE-RU)
+186.2.160.0/22
+186.2.164.0/22
+EOF
+
+georoute --country=RU --extras-v4-file=/etc/georoute/extras-ru-v4.list
+```
+
+File format: one prefix per line, `#` starts a comment to end-of-line, blank
+lines are ignored. Prefixes are merged with the RIPE feed before
+aggregation, so duplicates and adjacent-coalescing happen uniformly across
+the union. A v6 prefix in `--extras-v4-file` (or vice versa) is rejected
+with a line-numbered error to surface the operator typo loudly.
+
+When the flag is empty the feature is inert — existing deploys without
+extras files keep working unchanged.
+
 Run multiple instances on the same host with the systemd template unit:
 
 ```bash
