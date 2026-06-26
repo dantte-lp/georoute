@@ -14,7 +14,9 @@ ExecStart=/usr/local/bin/georoute \
     --nft-set-v4=${GEOROUTE_NFT_SET_V4} \
     --nft-set-v6=${GEOROUTE_NFT_SET_V6} \
     --marker-prefix=${GEOROUTE_MARKER_PREFIX} \
-    --frr-conf=${GEOROUTE_FRR_CONF}
+    --frr-conf=${GEOROUTE_FRR_CONF} \
+    --extras-v4-file=${GEOROUTE_EXTRAS_V4_FILE} \
+    --extras-v6-file=${GEOROUTE_EXTRAS_V6_FILE}
 TimeoutStartSec=10min
 StandardOutput=journal
 StandardError=journal
@@ -37,7 +39,13 @@ RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
 RestrictSUIDSGID=true
-ReadWritePaths=/etc/frr /run
+# /run/frr explicit: frr-reload.py writes /run/frr/reload-*.txt; without
+# this entry ProtectSystem=strict makes that path read-only and the service
+# exits 1 with OSError: Read-only file system. /etc/georoute is needed when
+# operator-supplied extras lists live there.
+ReadWritePaths=/etc/frr /etc/georoute /run /run/frr
+RuntimeDirectory=georoute
+RuntimeDirectoryPreserve=yes
 
 # Needs CAP_NET_ADMIN to call nft and frr-reload.py (which spawns vtysh).
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
