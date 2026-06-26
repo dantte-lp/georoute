@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/AOzhogin/healthcheck"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // errLastSuccessMissing distinguishes "no successful run yet" (first
@@ -72,12 +75,17 @@ func lastSuccessAge(path string) (time.Duration, error) {
 	return time.Since(info.ModTime()), nil
 }
 
-// healthServer hosts /live, /ready, /health, and /debug/pprof/* on its
-// own *http.Server so callers control graceful shutdown. The wrapped
-// healthcheck.HealthCheck owns the background check loop.
+// healthServer hosts /live, /ready, /health, /metrics, and
+// /debug/pprof/* on its own *http.Server so callers control graceful
+// shutdown. The wrapped healthcheck.HealthCheck owns the background
+// check loop. registry is shared between the healthcheck library, the
+// app metrics, and the Go runtime collectors so a single /metrics
+// scrape covers all three.
 type healthServer struct {
 	hc              healthcheck.HealthCheck
 	srv             *http.Server
+	registry        *prometheus.Registry
+	metrics         *metrics
 	lastSuccessPath string
 	addr            string
 	maxAge          time.Duration
@@ -88,7 +96,17 @@ type healthServer struct {
 // younger than maxAge" check and assembles a *http.Server. Addr ":0"
 // asks the OS for a free port — useful in tests; production should pass
 // a concrete address.
-func newHealthServer(addr, lastSuccessPath string, maxAge time.Duration) (*healthServer, error) {
+func newHealthServer(addr, lastSuccessPath, country string, maxAge time.Duration) (*healthServer, error) {
+	// Shared registry: healthcheck's check Gauges + our app metrics +
+	// Go runtime collectors all land in one registry exposed via a
+	// single /metrics endpoint. Pattern A from go-infra-support skill.
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector())
+	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	reg.MustRegister(collectors.NewBuildInfoCollector())
+
+	m := newMetrics(reg, country)
+
 	// No WithBackCheck — the last-success check is a single os.Stat,
 	// orders of magnitude cheaper than the 5s cache window. Running
 	// synchronously on each /ready hit reports current state without
@@ -97,6 +115,7 @@ func newHealthServer(addr, lastSuccessPath string, maxAge time.Duration) (*healt
 	hc := healthcheck.New(
 		healthcheck.WithSuccessStatus(http.StatusOK),
 		healthcheck.WithErrorStatus(http.StatusServiceUnavailable),
+		healthcheck.WithMetricsRegistry(reg),
 	)
 
 	checkErr := hc.Add("last-success", lastSuccessPath, func(_ context.Context) error {
@@ -124,6 +143,9 @@ func newHealthServer(addr, lastSuccessPath string, maxAge time.Duration) (*healt
 	mux.HandleFunc(healthcheck.HandlerStartup, hc.HandlerHealth)
 	mux.HandleFunc(healthcheck.HandlerHealthCheck, hc.HandlerHealth)
 	mux.HandleFunc(healthcheck.HandlerDebug, hc.HandlerPProf)
+	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{
+		Registry: reg,
+	}))
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -137,6 +159,8 @@ func newHealthServer(addr, lastSuccessPath string, maxAge time.Duration) (*healt
 	return &healthServer{
 		hc:              hc,
 		srv:             srv,
+		registry:        reg,
+		metrics:         m,
 		lastSuccessPath: lastSuccessPath,
 		addr:            addr,
 		maxAge:          maxAge,

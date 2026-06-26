@@ -205,7 +205,7 @@ func TestHealthServer_StartShutdownLifecycle(t *testing.T) {
 //nolint:unparam // maxAge varies across future tests; keep the signature flexible
 func newTestHealthServer(t *testing.T, lastSuccessPath string, maxAge time.Duration) *healthServer {
 	t.Helper()
-	hs, err := newHealthServer(":0", lastSuccessPath, maxAge)
+	hs, err := newHealthServer(":0", lastSuccessPath, "ru", maxAge)
 	if err != nil {
 		t.Fatalf("newHealthServer: %v", err)
 	}

@@ -219,7 +219,7 @@ func realMain() int {
 	// for graceful shutdown; see deploy/systemd notes.
 	var hs *healthServer
 	if flags.httpAddr != "" {
-		hs, err = newHealthServer(flags.httpAddr, flags.lastSuccessFile, flags.readyMaxAge)
+		hs, err = newHealthServer(flags.httpAddr, flags.lastSuccessFile, strings.ToLower(flags.country), flags.readyMaxAge)
 		if err != nil {
 			log.Printf("health server: %v", err)
 
@@ -234,9 +234,17 @@ func realMain() int {
 		}()
 	}
 
-	err = run(ctx, flags)
+	var m *metrics
+	if hs != nil {
+		m = hs.metrics
+	}
+	runStart := time.Now()
+	err = run(ctx, flags, m)
 	if err != nil {
 		log.Printf("error: %v", err)
+		if m != nil {
+			m.observeRun(metricResultError, time.Since(runStart))
+		}
 		if hs != nil {
 			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			_ = hs.shutdown(shutdownCtx)
@@ -244,6 +252,11 @@ func realMain() int {
 		}
 
 		return 1
+	}
+
+	if m != nil {
+		m.observeRun(metricResultSuccess, time.Since(runStart))
+		m.setLastSuccess(time.Now())
 	}
 
 	// Successful run: stamp the last-success marker so /ready returns 200.
@@ -296,10 +309,18 @@ func acquireLock(path string) (*os.File, error) {
 	return f, nil
 }
 
-func run(ctx context.Context, f cliFlags) error {
+func run(ctx context.Context, f cliFlags, m *metrics) error {
 	log.Printf("fetching RIPE Stat resources for %s", strings.ToUpper(f.country))
 
+	fetchStart := time.Now()
 	raw, source, err := fetchWithCache(ctx, f.feedURL, f.cacheFile, f.cacheMaxAge)
+	if m != nil {
+		fetchResult := metricResultSuccess
+		if err != nil {
+			fetchResult = metricResultError
+		}
+		m.observeFetch(source.String(), fetchResult, time.Since(fetchStart))
+	}
 	if err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
@@ -330,6 +351,15 @@ func run(ctx context.Context, f cliFlags) error {
 	v6Agg := aggregate(v6Parsed)
 	log.Printf("aggregated: %d v4, %d v6", len(v4Agg), len(v6Agg))
 
+	if m != nil {
+		m.setPrefixCount("v4", "ripe", len(raw.Data.Resources.IPv4))
+		m.setPrefixCount("v6", "ripe", len(raw.Data.Resources.IPv6))
+		m.setPrefixCount("v4", "extras", len(extrasV4))
+		m.setPrefixCount("v6", "extras", len(extrasV6))
+		m.setPrefixCount("v4", "merged", len(v4Agg))
+		m.setPrefixCount("v6", "merged", len(v6Agg))
+	}
+
 	v4Block := renderNetworks(v4Agg, f.routeMap)
 	v6Block := renderNetworks(v6Agg, f.routeMap)
 	log.Printf("v4 hash=%s v6 hash=%s", hashOf(v4Block)[:12], hashOf(v6Block)[:12])
@@ -348,7 +378,15 @@ func run(ctx context.Context, f cliFlags) error {
 	// would loop it back over our transit — updating nft first avoids that
 	// window.
 	if f.updateNft {
+		nftStart := time.Now()
 		err = applyNft(ctx, f, v4Agg, v6Agg)
+		if m != nil {
+			nftResult := metricResultSuccess
+			if err != nil {
+				nftResult = metricResultError
+			}
+			m.observeNftApply(nftResult, time.Since(nftStart))
+		}
 		if err != nil {
 			return fmt.Errorf("apply nft: %w", err)
 		}
@@ -375,7 +413,15 @@ func run(ctx context.Context, f cliFlags) error {
 		return nil
 	}
 
+	frrStart := time.Now()
 	err = applyFRRConfigOpts(ctx, f.frrConf, next, applyOpts{skipReload: !f.reloadOK})
+	if m != nil {
+		frrResult := metricResultSuccess
+		if err != nil {
+			frrResult = metricResultError
+		}
+		m.observeFrrReload(frrResult, time.Since(frrStart))
+	}
 	if err != nil {
 		return fmt.Errorf("apply frr.conf: %w", err)
 	}
