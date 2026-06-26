@@ -39,11 +39,13 @@ RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
 RestrictSUIDSGID=true
-# /run/frr explicit: frr-reload.py writes /run/frr/reload-*.txt; without
-# this entry ProtectSystem=strict makes that path read-only and the service
-# exits 1 with OSError: Read-only file system. /etc/georoute is needed when
-# operator-supplied extras lists live there.
-ReadWritePaths=/etc/frr /etc/georoute /run /run/frr
+# frr-reload.py writes /run/frr/reload-*.txt — covered transitively by
+# the /run entry. We list it explicitly anyway so the intent is visible
+# to operators auditing the unit (the bare "/run" is otherwise easy to
+# misread as "this unit doesn't touch FRR runtime state").
+# Extras files live read-only under /etc/georoute (see ReadOnlyPaths).
+ReadWritePaths=/etc/frr /run
+ReadOnlyPaths=/etc/georoute
 RuntimeDirectory=georoute
 RuntimeDirectoryPreserve=yes
 

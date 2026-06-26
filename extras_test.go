@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -144,8 +145,20 @@ func TestLoadExtras(t *testing.T) {
 		{
 			name:    "missing file errors out",
 			family:  extrasFamilyV4,
-			path:    filepath.Join(os.TempDir(), "georoute-extras-does-not-exist.list"),
+			path:    "<missing>",
 			wantErr: os.ErrNotExist,
+		},
+		{
+			name:    "UTF-8 BOM at file start is stripped",
+			family:  extrasFamilyV4,
+			content: "\xef\xbb\xbf186.2.160.0/22\n",
+			want:    []string{ddosA},
+		},
+		{
+			name:    "CRLF line endings tolerated",
+			family:  extrasFamilyV4,
+			content: "186.2.160.0/22\r\n186.2.164.0/22\r\n",
+			want:    []string{ddosA, ddosB},
 		},
 	}
 
@@ -157,6 +170,10 @@ func TestLoadExtras(t *testing.T) {
 			switch path {
 			case "<unset>":
 				path = ""
+			case "<missing>":
+				// t.TempDir is cleaned up at test exit and isolated per
+				// subtest, so this name is guaranteed absent under -parallel.
+				path = filepath.Join(t.TempDir(), "missing-extras.list")
 			case "":
 				path = writeTempExtras(t, c.content)
 			}
@@ -188,11 +205,53 @@ func TestLoadExtras(t *testing.T) {
 	}
 }
 
-// TestLoadExtras_MergesIntoAggregate verifies that prefixes from loadExtras
-// flow into aggregate the same way as RIPE-fed prefixes: append, then
-// aggregate dedupes and merges adjacent into the minimal covering set.
-// This is the end-to-end semantic the merge call site relies on.
-func TestLoadExtras_MergesIntoAggregate(t *testing.T) {
+// TestLoadExtras_BoundsTooLarge verifies the per-file byte cap kicks in
+// before we allocate per-prefix. We construct a file just over the limit
+// to ensure the boundary is rejected, then a file at the limit to ensure
+// it's accepted.
+func TestLoadExtras_BoundsTooLarge(t *testing.T) {
+	t.Parallel()
+
+	// Just over the cap.
+	tooBig := writeTempExtras(t, strings.Repeat("# pad\n", (extrasMaxFileBytes/6)+1))
+	_, err := loadExtras(tooBig, extrasFamilyV4)
+	if !errors.Is(err, errExtrasTooLarge) {
+		t.Fatalf("expected errExtrasTooLarge, got %v", err)
+	}
+
+	// At/below the cap with a single valid prefix → succeeds.
+	padded := strings.Repeat("# pad\n", 1000) + "186.2.160.0/22\n"
+	okFile := writeTempExtras(t, padded)
+	got, err := loadExtras(okFile, extrasFamilyV4)
+	if err != nil {
+		t.Fatalf("padded valid file: unexpected error %v", err)
+	}
+	if len(got) != 1 || got[0].String() != ddosA {
+		t.Errorf("padded valid file: got %v, want [%s]", got, ddosA)
+	}
+}
+
+// TestLoadExtras_BoundsLineTooLong verifies the per-line byte cap fires
+// with a line-numbered error (no bare "token too long"). The line is
+// constructed from a comment string of cap+1 bytes so it's syntactically
+// reasonable input that just happens to exceed the buffer.
+func TestLoadExtras_BoundsLineTooLong(t *testing.T) {
+	t.Parallel()
+
+	longLine := "# " + strings.Repeat("x", extrasMaxLineBytes) + "\n"
+	path := writeTempExtras(t, longLine)
+	_, err := loadExtras(path, extrasFamilyV4)
+	if !errors.Is(err, errExtrasLineTooLong) {
+		t.Fatalf("expected errExtrasLineTooLong, got %v", err)
+	}
+}
+
+// TestAggregate_AbsorbsExtras verifies that loadExtras output flows into
+// aggregate the same way RIPE-fed prefixes do: append + aggregate. The
+// call site at run() in main.go relies on this composition. We don't drive
+// run() itself here because that would require stubbing the RIPE HTTP
+// fetch; the test covers the merge semantics that the wiring depends on.
+func TestAggregate_AbsorbsExtras(t *testing.T) {
 	t.Parallel()
 
 	// RIPE feed has 10.0.0.0/24 and 10.0.1.0/24 — these merge to 10.0.0.0/23.
