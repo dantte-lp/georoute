@@ -88,6 +88,8 @@ type cliFlags struct {
 	nftSetV6     string
 	markerPrefix string
 	feedURL      string
+	extrasV4File string
+	extrasV6File string
 	reloadOK     bool
 	dryRun       bool
 	force        bool
@@ -149,6 +151,8 @@ func realMain() int {
 	flag.StringVar(&flags.nftSetV6, "nft-set-v6", "", "nftables v6 set name (default <cc>_v6)")
 	flag.StringVar(&flags.markerPrefix, "marker-prefix", "", "marker comment prefix between BEGIN-/END- and -V4/-V6 (default <CC>-FEED)")
 	flag.StringVar(&flags.feedURL, "feed-url", "", "RIPE Stat URL (default country-resource-list for <cc>)")
+	flag.StringVar(&flags.extrasV4File, "extras-v4-file", "", "path to operator-maintained IPv4 prefix list merged with RIPE feed (one prefix per line, # comments; empty = no extras)")
+	flag.StringVar(&flags.extrasV6File, "extras-v6-file", "", "path to operator-maintained IPv6 prefix list merged with RIPE feed (one prefix per line, # comments; empty = no extras)")
 	flag.Parse()
 
 	if showVersion {
@@ -218,8 +222,28 @@ func run(ctx context.Context, f cliFlags) error {
 	log.Printf("raw: %d v4 prefixes, %d v6 prefixes",
 		len(raw.Data.Resources.IPv4), len(raw.Data.Resources.IPv6))
 
-	v4Agg := aggregate(parsePrefixes(raw.Data.Resources.IPv4))
-	v6Agg := aggregate(parsePrefixes(raw.Data.Resources.IPv6))
+	// Extras are operator-maintained prefix lists (e.g. non-RIPE-country
+	// CDN ranges). They're merged before aggregate so dedup / minimal-cover
+	// applies uniformly to the union of RIPE + extras.
+	extrasV4, err := loadExtras(f.extrasV4File, extrasFamilyV4)
+	if err != nil {
+		return fmt.Errorf("load extras v4: %w", err)
+	}
+	extrasV6, err := loadExtras(f.extrasV6File, extrasFamilyV6)
+	if err != nil {
+		return fmt.Errorf("load extras v6: %w", err)
+	}
+	if f.extrasV4File != "" {
+		log.Printf("extras: loaded %d v4 prefixes from %s", len(extrasV4), f.extrasV4File)
+	}
+	if f.extrasV6File != "" {
+		log.Printf("extras: loaded %d v6 prefixes from %s", len(extrasV6), f.extrasV6File)
+	}
+
+	v4Parsed := append(parsePrefixes(raw.Data.Resources.IPv4), extrasV4...)
+	v6Parsed := append(parsePrefixes(raw.Data.Resources.IPv6), extrasV6...)
+	v4Agg := aggregate(v4Parsed)
+	v6Agg := aggregate(v6Parsed)
 	log.Printf("aggregated: %d v4, %d v6", len(v4Agg), len(v6Agg))
 
 	v4Block := renderNetworks(v4Agg, f.routeMap)
