@@ -21,9 +21,11 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -86,22 +88,25 @@ func main() {
 
 type cliFlags struct {
 	// strings first (16 B each on 64-bit) for field-alignment, bools last
-	frrConf      string
-	lockFile     string
-	country      string
-	routeMap     string
-	nftSetV4     string
-	nftSetV6     string
-	markerPrefix string
-	feedURL      string
-	extrasV4File string
-	extrasV6File string
-	cacheFile    string
-	cacheMaxAge  time.Duration
-	reloadOK     bool
-	dryRun       bool
-	force        bool
-	updateNft    bool
+	frrConf         string
+	lockFile        string
+	country         string
+	routeMap        string
+	nftSetV4        string
+	nftSetV6        string
+	markerPrefix    string
+	feedURL         string
+	extrasV4File    string
+	extrasV6File    string
+	cacheFile       string
+	httpAddr        string
+	lastSuccessFile string
+	cacheMaxAge     time.Duration
+	readyMaxAge     time.Duration
+	reloadOK        bool
+	dryRun          bool
+	force           bool
+	updateNft       bool
 }
 
 // applyDefaults fills the country-dependent fields from `country` when the
@@ -134,6 +139,12 @@ func (f *cliFlags) applyDefaults() {
 	}
 	if f.cacheMaxAge == 0 {
 		f.cacheMaxAge = 7 * 24 * time.Hour
+	}
+	if f.lastSuccessFile == "" {
+		f.lastSuccessFile = "/var/lib/georoute/last-success-" + ccLower
+	}
+	if f.readyMaxAge == 0 {
+		f.readyMaxAge = 24 * time.Hour
 	}
 }
 
@@ -169,6 +180,9 @@ func realMain() int {
 	flag.StringVar(&flags.extrasV6File, "extras-v6-file", "", "path to operator-maintained IPv6 prefix list merged with RIPE feed (one prefix per line, # comments; empty = no extras)")
 	flag.StringVar(&flags.cacheFile, "cache-file", "", "path to gzipped JSON cache of last successful RIPE response; used as fallback on consecutive 5xx (default /var/lib/georoute/feed-<cc>.json.gz)")
 	flag.DurationVar(&flags.cacheMaxAge, "cache-max-age", 0, "maximum age of the cache file before it is refused (default 7d)")
+	flag.StringVar(&flags.httpAddr, "http-addr", "", "listen address for the /live + /ready + /debug/pprof HTTP server; empty disables it; when set, the process parks on SIGTERM after the oneshot work completes (e.g. :9090)")
+	flag.StringVar(&flags.lastSuccessFile, "last-success-file", "", "path to the timestamp marker written after each successful run; /readyz reports unhealthy when missing or stale (default /var/lib/georoute/last-success-<cc>)")
+	flag.DurationVar(&flags.readyMaxAge, "ready-max-age", 0, "maximum age of last-success before /readyz starts returning 503 (default 24h)")
 	flag.Parse()
 
 	if showVersion {
@@ -198,14 +212,68 @@ func realMain() int {
 		_ = lockF.Close() // closing releases the flock
 	}()
 
+	// Optional health/pprof HTTP server. When --http-addr is set, the
+	// process starts the server before the oneshot work, runs the work,
+	// and then parks until SIGTERM. The systemd timer must use a
+	// `RemainAfterExit=no` unit with `TimeoutStopSec` set wide enough
+	// for graceful shutdown; see deploy/systemd notes.
+	var hs *healthServer
+	if flags.httpAddr != "" {
+		hs, err = newHealthServer(flags.httpAddr, flags.lastSuccessFile, flags.readyMaxAge)
+		if err != nil {
+			log.Printf("health server: %v", err)
+
+			return 1
+		}
+		go func() {
+			log.Printf("health: listening on %s (/live, /ready, /debug/pprof/)", flags.httpAddr)
+			servErr := hs.start(ctx)
+			if servErr != nil {
+				log.Printf("health server exited: %v", servErr)
+			}
+		}()
+	}
+
 	err = run(ctx, flags)
 	if err != nil {
 		log.Printf("error: %v", err)
+		if hs != nil {
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = hs.shutdown(shutdownCtx)
+			shutdownCancel()
+		}
 
 		return 1
 	}
 
+	// Successful run: stamp the last-success marker so /ready returns 200.
+	if flags.httpAddr != "" || flags.lastSuccessFile != "" {
+		writeErr := writeLastSuccess(flags.lastSuccessFile)
+		if writeErr != nil {
+			log.Printf("warn: last-success write failed: %v", writeErr)
+		}
+	}
+
+	// Park if the operator asked for a long-lived HTTP server. We hold
+	// the flock for the rest of the cycle so a second timer-fired
+	// instance is rejected fast instead of overlapping.
+	if hs != nil {
+		log.Printf("oneshot complete; parking until SIGTERM (timer will fire a new process at the next interval)")
+		<-parkContext().Done()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = hs.shutdown(shutdownCtx)
+		shutdownCancel()
+	}
+
 	return 0
+}
+
+// parkContext returns a context cancelled on SIGTERM/SIGINT. Stub-able
+// in tests (today: real signal hookup).
+var parkContext = func() context.Context {
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+
+	return ctx
 }
 
 // acquireLock takes an exclusive (LOCK_EX | LOCK_NB) flock on path. Releases
