@@ -134,7 +134,7 @@ func TestFetchWithCache_FreshSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "feed-ru.json.gz")
 
-	resp, source, err := fetchWithCache(t.Context(), srv.URL, path, time.Hour)
+	resp, source, err := fetchWithCache(t.Context(), srv.URL, path, time.Hour, 1, 10*time.Millisecond, 5*time.Second)
 	if err != nil {
 		t.Fatalf("fetchWithCache: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestFetchWithCache_5xxFallsBackToCache(t *testing.T) {
 		t.Fatalf("seed cache: %v", err)
 	}
 
-	resp, source, err := fetchWithCache(t.Context(), srv.URL, path, time.Hour)
+	resp, source, err := fetchWithCache(t.Context(), srv.URL, path, time.Hour, 1, 10*time.Millisecond, 5*time.Second)
 	if err != nil {
 		t.Fatalf("fetchWithCache: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestFetchWithCache_4xxDoesNotFallBack(t *testing.T) {
 		t.Fatalf("seed cache: %v", err)
 	}
 
-	_, _, err = fetchWithCache(t.Context(), srv.URL, path, time.Hour)
+	_, _, err = fetchWithCache(t.Context(), srv.URL, path, time.Hour, 1, 10*time.Millisecond, 5*time.Second)
 	if err == nil {
 		t.Fatal("expected error on 4xx, got nil")
 	}
@@ -240,7 +240,7 @@ func TestFetchWithCache_5xxWithStaleCache(t *testing.T) {
 		t.Fatalf("chtimes: %v", err)
 	}
 
-	_, _, err = fetchWithCache(t.Context(), srv.URL, path, 7*24*time.Hour)
+	_, _, err = fetchWithCache(t.Context(), srv.URL, path, 7*24*time.Hour, 1, 10*time.Millisecond, 5*time.Second)
 	if err == nil {
 		t.Fatal("expected error when fetch fails and cache is stale, got nil")
 	}

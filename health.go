@@ -86,6 +86,7 @@ type healthServer struct {
 	srv             *http.Server
 	registry        *prometheus.Registry
 	metrics         *metrics
+	ln              net.Listener
 	lastSuccessPath string
 	addr            string
 	maxAge          time.Duration
@@ -173,19 +174,44 @@ func (h *healthServer) handler() http.Handler {
 	return h.srv.Handler
 }
 
-// start kicks off the background check loop and starts the HTTP
-// listener bound to h.addr. Returns nil-or-ErrServerClosed-or-error
-// when serve() exits; meant to be called from a goroutine in the
-// caller.
-func (h *healthServer) start(ctx context.Context) error {
-	h.hc.Start()
+// preBind opens the TCP listener synchronously so the caller can fail
+// fast (exit non-zero) when the address is busy, the port is
+// privileged, or the file descriptors are exhausted. Without this,
+// the bind error would surface only inside a goroutine — systemd
+// would see the unit as UP while the metrics endpoint is dead.
+//
+// On success, the returned listener is stashed on h and later picked
+// up by start(). Idempotent: a second call returns the cached
+// listener.
+func (h *healthServer) preBind(ctx context.Context) error {
+	if h.ln != nil {
+		return nil
+	}
 	lc := &net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", h.addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", h.addr, err)
 	}
+	h.ln = ln
 
-	return h.serve(ln)
+	return nil
+}
+
+// start kicks off the background check loop and runs the HTTP server
+// against the pre-bound listener. Caller MUST have invoked preBind
+// first; we don't open a fallback listener here on purpose — the
+// whole point of the split is that a failed bind exits the process
+// before this goroutine starts.
+func (h *healthServer) start(ctx context.Context) error {
+	if h.ln == nil {
+		err := h.preBind(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	h.hc.Start()
+
+	return h.serve(h.ln)
 }
 
 // serve runs the embedded http.Server against an existing listener;
