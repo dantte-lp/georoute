@@ -140,6 +140,63 @@ func TestRefreshLoop_ContextCancelStops(t *testing.T) {
 	}
 }
 
+// TestRefreshLoop_DrainsInFlightOnCancel — when ctx is cancelled mid-
+// cycle, refreshLoop must NOT return until the in-flight work
+// goroutine has finished. Otherwise SIGTERM races against an open
+// nft/frr-reload transaction and can leave state half-applied.
+func TestRefreshLoop_DrainsInFlightOnCancel(t *testing.T) {
+	t.Parallel()
+	var started, finished atomic.Bool
+	release := make(chan struct{})
+	work := func(context.Context) {
+		started.Store(true)
+		<-release
+		// Simulate teardown that must run before the process exits.
+		time.Sleep(20 * time.Millisecond)
+		finished.Store(true)
+	}
+	ch := make(chan time.Time)
+	tf := func(time.Duration) (<-chan time.Time, func()) {
+		return ch, func() {}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan error, 1)
+	go func() {
+		doneCh <- refreshLoop(ctx, time.Hour, work, tf, slogDiscard(), nil)
+	}()
+
+	// Wait until the initial work goroutine is in-flight.
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) && !started.Load() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !started.Load() {
+		t.Fatal("initial work never started")
+	}
+
+	cancel()
+	// refreshLoop must NOT return yet — in-flight goroutine is blocked.
+	select {
+	case <-doneCh:
+		t.Fatal("refreshLoop returned before in-flight work finished")
+	case <-time.After(40 * time.Millisecond):
+	}
+
+	close(release)
+	// Now it should return promptly and finished must be true.
+	select {
+	case err := <-doneCh:
+		if err != nil {
+			t.Errorf("err = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("refreshLoop never returned after work completed")
+	}
+	if !finished.Load() {
+		t.Error("refreshLoop returned before work goroutine ran to completion")
+	}
+}
+
 // TestRefreshLoop_TickerFactoryStopCalled — when the loop exits, the
 // stop func returned by the ticker factory must be called so the real
 // time.Ticker is reclaimed.

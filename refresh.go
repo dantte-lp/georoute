@@ -36,7 +36,10 @@ func refreshLoop(
 	logger *slog.Logger,
 	m *metrics,
 ) error {
-	var mu sync.Mutex
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
 	runOnce := func() {
 		if !mu.TryLock() {
 			if m != nil {
@@ -61,15 +64,25 @@ func refreshLoop(
 	// the ticker loop can start consuming ticks immediately. A
 	// long-running cycle then naturally collides with the next tick
 	// and gets surfaced via skippedOverlapTotal rather than queueing.
-	go runOnce()
+	// Every dispatched runOnce is tracked by wg so we can drain
+	// in-flight cycles on shutdown — SIGTERM must not race against
+	// an open nft/frr-reload transaction.
+	dispatch := func() {
+		wg.Go(runOnce)
+	}
+	dispatch()
 	ch, stop := tf(interval)
 	defer stop()
 	for {
 		select {
 		case <-ctx.Done():
+			// Drain in-flight cycle(s) before returning so the caller
+			// can safely tear down the HTTP server / exit the process.
+			wg.Wait()
+
 			return nil
 		case <-ch:
-			go runOnce()
+			dispatch()
 		}
 	}
 }
