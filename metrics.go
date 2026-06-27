@@ -28,10 +28,11 @@ const (
 // but business code should use the observe*/set* helpers — they keep
 // the country label centralized in one place.
 type metrics struct {
-	runsTotal       *prometheus.CounterVec
-	fetchesTotal    *prometheus.CounterVec
-	nftAppliesTotal *prometheus.CounterVec
-	frrReloadsTotal *prometheus.CounterVec
+	runsTotal           *prometheus.CounterVec
+	fetchesTotal        *prometheus.CounterVec
+	nftAppliesTotal     *prometheus.CounterVec
+	frrReloadsTotal     *prometheus.CounterVec
+	skippedOverlapTotal *prometheus.CounterVec
 
 	prefixesCount   *prometheus.GaugeVec
 	lastSuccessUnix *prometheus.GaugeVec
@@ -71,6 +72,10 @@ func newMetrics(reg prometheus.Registerer, country string) *metrics {
 			Name: "georoute_frr_reloads_total",
 			Help: "frr-reload.py invocations by result (success|error|rolled_back).",
 		}, []string{metricLabelCountry, metricLabelResult}),
+		skippedOverlapTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "georoute_skipped_overlap_total",
+			Help: "Refresh ticks dropped because the previous cycle was still running.",
+		}, []string{metricLabelCountry}),
 		prefixesCount: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "georoute_prefixes",
 			Help: "Number of prefixes in the last aggregated set by family and source.",
@@ -101,7 +106,7 @@ func newMetrics(reg prometheus.Registerer, country string) *metrics {
 	}
 
 	for _, c := range []prometheus.Collector{
-		m.runsTotal, m.fetchesTotal, m.nftAppliesTotal, m.frrReloadsTotal,
+		m.runsTotal, m.fetchesTotal, m.nftAppliesTotal, m.frrReloadsTotal, m.skippedOverlapTotal,
 		m.prefixesCount, m.lastSuccessUnix, m.cacheAge,
 		m.fetchDuration, m.nftApplyDuration, m.frrReloadDuration,
 	} {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 // frrSyntaxCheck validates a candidate FRR config without applying it.
@@ -15,7 +16,9 @@ import (
 var frrSyntaxCheck = defaultFrrSyntaxCheck
 
 // frrReload runs frr-reload.py against the live config path. Variable
-// for tests, same reason as frrSyntaxCheck.
+// for tests, same reason as frrSyntaxCheck. The script path and
+// timeout come from applyOpts; the production binding wraps
+// /usr/lib/frr/frr-reload.py.
 var frrReload = defaultFrrReload
 
 // applyOpts captures the configurable behavior of applyFRRConfigOpts.
@@ -23,13 +26,18 @@ var frrReload = defaultFrrReload
 // wrapper around applyFRRConfigOpts{} so callers don't have to spell
 // out defaults.
 type applyOpts struct {
-	skipReload bool
+	frrReloadScript  string
+	skipReload       bool
+	frrReloadTimeout time.Duration
 }
 
 // applyFRRConfig wraps applyFRRConfigOpts with the production defaults:
 // run syntax check, atomic-write, reload, rollback on failure.
 func applyFRRConfig(ctx context.Context, livePath, newContents string) error {
-	return applyFRRConfigOpts(ctx, livePath, newContents, applyOpts{})
+	return applyFRRConfigOpts(ctx, livePath, newContents, applyOpts{
+		frrReloadScript:  defaultFrrReloadScript,
+		frrReloadTimeout: defaultFrrReloadTimeout,
+	})
 }
 
 // applyFRRConfigOpts safely swaps a FRR config file in place and
@@ -94,7 +102,7 @@ func applyFRRConfigOpts(ctx context.Context, livePath, newContents string, opts 
 		return fmt.Errorf("write live: %w", err)
 	}
 
-	reloadErr := frrReload(ctx, livePath)
+	reloadErr := frrReload(ctx, livePath, opts.frrReloadScript, opts.frrReloadTimeout)
 	if reloadErr == nil {
 		return nil
 	}
@@ -114,7 +122,7 @@ func applyFRRConfigOpts(ctx context.Context, livePath, newContents string, opts 
 			fmt.Errorf("restore: %w", restoreErr),
 		)
 	}
-	rollbackReloadErr := frrReload(ctx, livePath)
+	rollbackReloadErr := frrReload(ctx, livePath, opts.frrReloadScript, opts.frrReloadTimeout)
 	if rollbackReloadErr != nil {
 		return errors.Join(
 			fmt.Errorf("reload: %w", reloadErr),
@@ -143,12 +151,13 @@ func defaultFrrSyntaxCheck(ctx context.Context, path string) error {
 
 // defaultFrrReload runs frr-reload.py against path. Same wrap as the
 // previous inline reloadFRR; kept here so applyFRRConfig has a single
-// hook variable.
-func defaultFrrReload(ctx context.Context, path string) error {
-	reloadCtx, cancel := context.WithTimeout(ctx, frrReloadTimeout)
+// hook variable. Script path + timeout flow from the cliFlags via
+// applyOpts so the operator can override either at the CLI.
+func defaultFrrReload(ctx context.Context, path, scriptPath string, timeout time.Duration) error {
+	reloadCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(reloadCtx, frrReloadScript, "--reload", path) //nolint:gosec // constants + ctx-bounded
+	cmd := exec.CommandContext(reloadCtx, scriptPath, "--reload", path) //nolint:gosec // script path + ctx-bounded; operator owns the override
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = []string{envPATH}

@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -32,20 +33,20 @@ import (
 )
 
 const (
-	httpTimeout      = 60 * time.Second
-	frrReloadTimeout = 3 * time.Minute
-	nftTimeout       = 30 * time.Second
-	sampleLines      = 5
-	maxBodyBytes     = 32 << 20 // cap RIPE Stat JSON at 32 MiB
-	retryAttempts    = 3
-	retryBaseDelay   = 2 * time.Second
-	configFileMode   = 0o640
-	limitErrorBody   = 4096
-	frrReloadScript  = "/usr/lib/frr/frr-reload.py"
-	nftBinary        = "/usr/sbin/nft"
-	nftTable         = "inet pbr"
-	envPATH          = "PATH=/usr/sbin:/usr/bin:/sbin:/bin"
-	feedURLTemplate  = "https://stat.ripe.net/data/country-resource-list/data.json?resource=%s&v4_format=prefix"
+	defaultHTTPTimeout      = 60 * time.Second
+	defaultFrrReloadTimeout = 3 * time.Minute
+	defaultNftTimeout       = 30 * time.Second
+	sampleLines             = 5
+	maxBodyBytes            = 32 << 20 // cap RIPE Stat JSON at 32 MiB
+	defaultRetryAttempts    = 3
+	defaultRetryBaseDelay   = 2 * time.Second
+	configFileMode          = 0o640
+	limitErrorBody          = 4096
+	defaultFrrReloadScript  = "/usr/lib/frr/frr-reload.py"
+	defaultNftBinary        = "/usr/sbin/nft"
+	nftTable                = "inet pbr"
+	envPATH                 = "PATH=/usr/sbin:/usr/bin:/sbin:/bin"
+	feedURLTemplate         = "https://stat.ripe.net/data/country-resource-list/data.json?resource=%s&v4_format=prefix"
 )
 
 // version is overwritten at link time via `-X main.version=…` in the Makefile
@@ -88,28 +89,37 @@ func main() {
 }
 
 type cliFlags struct {
-	// strings first (16 B each on 64-bit) for field-alignment, bools last
-	frrConf         string
-	lockFile        string
-	country         string
-	routeMap        string
-	nftSetV4        string
-	nftSetV6        string
-	markerPrefix    string
-	feedURL         string
-	extrasV4File    string
-	extrasV6File    string
-	cacheFile       string
-	httpAddr        string
-	lastSuccessFile string
-	logFormat       string
-	logLevel        string
-	cacheMaxAge     time.Duration
-	readyMaxAge     time.Duration
-	reloadOK        bool
-	dryRun          bool
-	force           bool
-	updateNft       bool
+	// strings first (16 B each on 64-bit) for field-alignment, durations
+	// next, ints, bools last.
+	frrConf          string
+	lockFile         string
+	country          string
+	routeMap         string
+	nftSetV4         string
+	nftSetV6         string
+	markerPrefix     string
+	feedURL          string
+	extrasV4File     string
+	extrasV6File     string
+	cacheFile        string
+	httpAddr         string
+	lastSuccessFile  string
+	logFormat        string
+	logLevel         string
+	frrReloadScript  string
+	nftBinary        string
+	cacheMaxAge      time.Duration
+	readyMaxAge      time.Duration
+	httpTimeout      time.Duration
+	frrReloadTimeout time.Duration
+	nftTimeout       time.Duration
+	retryBaseDelay   time.Duration
+	refreshInterval  time.Duration
+	retryAttempts    int
+	reloadOK         bool
+	dryRun           bool
+	force            bool
+	updateNft        bool
 }
 
 // applyDefaults fills the country-dependent fields from `country` when the
@@ -153,8 +163,31 @@ func (f *cliFlags) applyDefaults() {
 		f.logFormat = logFormatText
 	}
 	if f.logLevel == "" {
-		f.logLevel = "info"
+		f.logLevel = defaultLogLevel
 	}
+	if f.httpTimeout == 0 {
+		f.httpTimeout = defaultHTTPTimeout
+	}
+	if f.frrReloadTimeout == 0 {
+		f.frrReloadTimeout = defaultFrrReloadTimeout
+	}
+	if f.nftTimeout == 0 {
+		f.nftTimeout = defaultNftTimeout
+	}
+	if f.retryAttempts == 0 {
+		f.retryAttempts = defaultRetryAttempts
+	}
+	if f.retryBaseDelay == 0 {
+		f.retryBaseDelay = defaultRetryBaseDelay
+	}
+	if f.frrReloadScript == "" {
+		f.frrReloadScript = defaultFrrReloadScript
+	}
+	if f.nftBinary == "" {
+		f.nftBinary = defaultNftBinary
+	}
+	// refreshInterval default stays 0 — oneshot semantics; daemon
+	// mode opts in via the flag.
 }
 
 // markers returns the four marker comment lines used to delimit per-country
@@ -168,6 +201,11 @@ func (f *cliFlags) markers() (string, string, string, string) {
 		"  ! END-" + f.markerPrefix + "-V6"
 }
 
+// realMain is the binary's seam between OS-level concerns (flags, logging,
+// signals, flock, HTTP bind) and the work pipeline; the glue is
+// intentionally linear so each step is auditable in one read.
+//
+//nolint:funlen
 func realMain() int {
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
@@ -194,6 +232,14 @@ func realMain() int {
 	flag.DurationVar(&flags.readyMaxAge, "ready-max-age", 0, "maximum age of last-success before /readyz starts returning 503 (default 24h)")
 	flag.StringVar(&flags.logFormat, "log-format", "", "log output format: text|json (default text — switch to json for systemd-journald + structured ingest)")
 	flag.StringVar(&flags.logLevel, "log-level", "", "minimum log level: debug|info|warn|error (default info)")
+	flag.DurationVar(&flags.httpTimeout, "http-timeout", 0, "per-request timeout for the RIPE Stat fetch (default 60s)")
+	flag.DurationVar(&flags.frrReloadTimeout, "frr-reload-timeout", 0, "timeout for the frr-reload.py invocation (default 3m)")
+	flag.DurationVar(&flags.nftTimeout, "nft-timeout", 0, "timeout for the nft set replacement (default 30s)")
+	flag.IntVar(&flags.retryAttempts, "retry-attempts", 0, "number of RIPE Stat fetch attempts before falling back to cache (default 3)")
+	flag.DurationVar(&flags.retryBaseDelay, "retry-base-delay", 0, "base delay for the linear retry backoff (default 2s)")
+	flag.StringVar(&flags.frrReloadScript, "frr-reload-script", "", "path to frr-reload.py (default /usr/lib/frr/frr-reload.py)")
+	flag.StringVar(&flags.nftBinary, "nft-binary", "", "path to the nft binary (default /usr/sbin/nft)")
+	flag.DurationVar(&flags.refreshInterval, "refresh-interval", 0, "when >0 + --http-addr set, re-run the work pipeline every interval (daemon mode). 0 means oneshot semantics: run once and park on SIGTERM.")
 	flag.Parse()
 
 	if showVersion {
@@ -221,12 +267,13 @@ func realMain() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// run_id is stamped into every log entry from here on so a JSON
-	// log stream can be sliced per cycle and joined to /metrics
-	// observations carrying the same id. We also re-bind the stdlib
-	// default so any leftover log.Printf path inherits the same field.
-	runID := newRunID()
-	logger = withRunID(logger, runID)
+	// Logging plan:
+	//   - process-level lines (boot, bind, lock) carry only `country`.
+	//   - per-cycle work lines (run, fetch, nft, reload) carry
+	//     `country` + a fresh `run_id` derived inside the work
+	//     closure. Oneshot mode emits one cycle → one id (identical
+	//     to v2.0); daemon mode emits one id per refresh cycle so
+	//     logs can be sliced per pass.
 	slog.SetDefault(logger)
 
 	// Exclusive lock prevents two timer cycles (or timer + manual) from
@@ -246,11 +293,21 @@ func realMain() int {
 	// and then parks until SIGTERM. The systemd timer must use a
 	// `RemainAfterExit=no` unit with `TimeoutStopSec` set wide enough
 	// for graceful shutdown; see deploy/systemd notes.
+	// Optional health/pprof/metrics HTTP server. When --http-addr is
+	// set, we synchronously bind the listener BEFORE entering the
+	// run/refresh path so a failed bind exits the process with a real
+	// error instead of silently parking with a dead /metrics endpoint.
 	var hs *healthServer
 	if flags.httpAddr != "" {
 		hs, err = newHealthServer(flags.httpAddr, flags.lastSuccessFile, strings.ToLower(flags.country), flags.readyMaxAge)
 		if err != nil {
 			logger.Error("health server init", slog.String("err", err.Error()))
+
+			return 1
+		}
+		err = hs.preBind(ctx)
+		if err != nil {
+			logger.Error("health server bind", slog.String("err", err.Error()), slog.String("addr", flags.httpAddr))
 
 			return 1
 		}
@@ -269,44 +326,88 @@ func realMain() int {
 	if hs != nil {
 		m = hs.metrics
 	}
-	runStart := time.Now()
-	err = run(ctx, flags, logger, m)
-	if err != nil {
-		logger.Error("run failed", slog.String("err", err.Error()), slog.Duration("elapsed", time.Since(runStart)))
-		if m != nil {
-			m.observeRun(metricResultError, time.Since(runStart))
+
+	// Build the per-cycle work closure ONCE; refreshLoop calls it
+	// initially and on each tick. The closure handles the same
+	// instrumentation/last-success stamping the old code did but in
+	// one place — so both oneshot and daemon paths agree.
+	//
+	// lastRunOK is the latest run's success bit. Daemon mode ignores
+	// it (failures are observable via metrics); oneshot reads it to
+	// decide the process exit code so existing systemd timer
+	// "failed" semantics are preserved.
+	var lastRunOK atomic.Bool
+	// processLogger keeps the process-level run_id for "before any
+	// cycle started" lines; the per-cycle logger below derives a
+	// fresh id so operators can slice daemon logs by cycle.
+	processLogger := logger
+	work := func(workCtx context.Context) {
+		// Fresh run_id per cycle. Oneshot mode still emits exactly one
+		// per process, so the behavior is identical to v2.0; daemon
+		// mode gets one id per refresh-interval boundary.
+		cycleLogger := withRunID(processLogger, newRunID())
+		runStart := time.Now()
+		runErr := run(workCtx, flags, cycleLogger, m)
+		if runErr != nil {
+			cycleLogger.Error("run failed", slog.String("err", runErr.Error()), slog.Duration("elapsed", time.Since(runStart)))
+			if m != nil {
+				m.observeRun(metricResultError, time.Since(runStart))
+			}
+			lastRunOK.Store(false)
+
+			return
 		}
+		if m != nil {
+			m.observeRun(metricResultSuccess, time.Since(runStart))
+			m.setLastSuccess(time.Now())
+		}
+		if flags.httpAddr != "" || flags.lastSuccessFile != "" {
+			writeErr := writeLastSuccess(flags.lastSuccessFile)
+			if writeErr != nil {
+				cycleLogger.Warn("last-success write failed", slog.String("err", writeErr.Error()))
+			}
+		}
+		lastRunOK.Store(true)
+	}
+
+	// Daemon mode (refresh-interval > 0): refreshLoop drives ticks.
+	// Oneshot mode (refresh-interval == 0): refreshLoop runs work once
+	// synchronously and returns; the post-run park is then identical
+	// to v2.0 behavior.
+	if flags.refreshInterval > 0 {
+		// Daemon: SIGTERM/SIGINT cancel the loop ctx so the loop
+		// exits cleanly. Use a separate context so the 5min
+		// outer-budget on ctx doesn't kill the daemon at the 5-min mark.
+		daemonCtx, daemonCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer daemonCancel()
+		loopErr := refreshLoop(daemonCtx, flags.refreshInterval, work, defaultTickerFactory, logger, m)
 		if hs != nil {
-			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			_ = hs.shutdown(shutdownCtx)
 			shutdownCancel()
 		}
+		if loopErr != nil {
+			logger.Error("refresh loop exited", slog.String("err", loopErr.Error()))
 
-		return 1
-	}
-
-	if m != nil {
-		m.observeRun(metricResultSuccess, time.Since(runStart))
-		m.setLastSuccess(time.Now())
-	}
-
-	// Successful run: stamp the last-success marker so /ready returns 200.
-	if flags.httpAddr != "" || flags.lastSuccessFile != "" {
-		writeErr := writeLastSuccess(flags.lastSuccessFile)
-		if writeErr != nil {
-			logger.Warn("last-success write failed", slog.String("err", writeErr.Error()))
+			return 1
 		}
+
+		return 0
 	}
 
-	// Park if the operator asked for a long-lived HTTP server. We hold
-	// the flock for the rest of the cycle so a second timer-fired
-	// instance is rejected fast instead of overlapping.
+	// Oneshot synchronous run + (optional) park.
+	work(ctx)
+
 	if hs != nil {
 		logger.Info("oneshot complete; parking until SIGTERM (timer fires the next process)")
 		<-parkContext().Done()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_ = hs.shutdown(shutdownCtx)
 		shutdownCancel()
+	}
+
+	if !lastRunOK.Load() {
+		return 1
 	}
 
 	return 0
@@ -344,7 +445,7 @@ func run(ctx context.Context, f cliFlags, logger *slog.Logger, m *metrics) error
 	logger.Info("fetching RIPE Stat resources")
 
 	fetchStart := time.Now()
-	raw, source, err := fetchWithCache(ctx, f.feedURL, f.cacheFile, f.cacheMaxAge)
+	raw, source, err := fetchWithCache(ctx, f.feedURL, f.cacheFile, f.cacheMaxAge, f.retryAttempts, f.retryBaseDelay, f.httpTimeout)
 	if m != nil {
 		fetchResult := metricResultSuccess
 		if err != nil {
@@ -457,7 +558,11 @@ func run(ctx context.Context, f cliFlags, logger *slog.Logger, m *metrics) error
 	}
 
 	frrStart := time.Now()
-	err = applyFRRConfigOpts(ctx, f.frrConf, next, applyOpts{skipReload: !f.reloadOK})
+	err = applyFRRConfigOpts(ctx, f.frrConf, next, applyOpts{
+		skipReload:       !f.reloadOK,
+		frrReloadScript:  f.frrReloadScript,
+		frrReloadTimeout: f.frrReloadTimeout,
+	})
 	if m != nil {
 		frrResult := metricResultSuccess
 		if err != nil {
@@ -487,10 +592,10 @@ func applyNft(ctx context.Context, f cliFlags, v4, v6 []netip.Prefix) error {
 		_, _ = fmt.Fprintf(&script, "add element %s %s { %s }\n", nftTable, f.nftSetV6, joinPrefixes(v6))
 	}
 
-	nftCtx, cancel := context.WithTimeout(ctx, nftTimeout)
+	nftCtx, cancel := context.WithTimeout(ctx, f.nftTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(nftCtx, nftBinary, "-f", "-")
+	cmd := exec.CommandContext(nftCtx, f.nftBinary, "-f", "-") //nolint:gosec // path validated by operator, ctx-bounded
 	cmd.Stdin = strings.NewReader(script.String())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -518,16 +623,16 @@ func joinPrefixes(ps []netip.Prefix) string {
 }
 
 // fetchWithRetry calls fetch with up to retryAttempts attempts, with
-// exponential backoff between them. RIPE Stat occasionally 503/429s under
+// linear backoff between them. RIPE Stat occasionally 503/429s under
 // load; one failure on a 12h timer means 12h stale state, so retry is
 // cheap insurance.
-func fetchWithRetry(ctx context.Context, url string) (*ripeResp, error) {
+func fetchWithRetry(ctx context.Context, url string, attempts int, baseDelay, httpTimeout time.Duration) (*ripeResp, error) {
 	var lastErr error
-	for attempt := 1; attempt <= retryAttempts; attempt++ {
+	for attempt := 1; attempt <= attempts; attempt++ {
 		if attempt > 1 {
-			backoff := time.Duration(attempt-1) * retryBaseDelay
+			backoff := time.Duration(attempt-1) * baseDelay
 			slog.Info("fetch retry",
-				slog.Int("attempt", attempt), slog.Int("max", retryAttempts),
+				slog.Int("attempt", attempt), slog.Int("max", attempts),
 				slog.Duration("backoff", backoff),
 				slog.String("last_err", lastErr.Error()))
 			select {
@@ -536,7 +641,7 @@ func fetchWithRetry(ctx context.Context, url string) (*ripeResp, error) {
 			case <-time.After(backoff):
 			}
 		}
-		resp, err := fetch(ctx, url)
+		resp, err := fetch(ctx, url, httpTimeout)
 		if err == nil {
 			return resp, nil
 		}
@@ -546,8 +651,8 @@ func fetchWithRetry(ctx context.Context, url string) (*ripeResp, error) {
 	return nil, fmt.Errorf("retries exhausted: %w", lastErr)
 }
 
-func fetch(ctx context.Context, url string) (*ripeResp, error) {
-	client := &http.Client{Timeout: httpTimeout}
+func fetch(ctx context.Context, url string, timeout time.Duration) (*ripeResp, error) {
+	client := &http.Client{Timeout: timeout}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

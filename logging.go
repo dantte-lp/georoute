@@ -21,7 +21,8 @@ const (
 	logFormatText = "text"
 	logFormatJSON = "json"
 
-	logAttrRunID = "run_id"
+	logAttrRunID    = "run_id"
+	defaultLogLevel = "info"
 )
 
 // newLogger constructs a *slog.Logger that writes to w with the

@@ -143,8 +143,8 @@ func readCachedFeed(path string, maxAge time.Duration) (*ripeResp, time.Duration
 //
 // cachePath = "" disables the cache layer entirely (backward compat with
 // callers that don't yet support it).
-func fetchWithCache(ctx context.Context, url, cachePath string, cacheMaxAge time.Duration) (*ripeResp, feedSource, error) {
-	resp, err := fetchWithRetry(ctx, url)
+func fetchWithCache(ctx context.Context, url, cachePath string, cacheMaxAge time.Duration, retryAttempts int, retryBaseDelay, httpTimeout time.Duration) (*ripeResp, feedSource, error) {
+	resp, err := fetchWithRetry(ctx, url, retryAttempts, retryBaseDelay, httpTimeout)
 	if err == nil {
 		if cachePath != "" {
 			writeErr := writeCachedFeed(cachePath, resp)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 var (
@@ -38,7 +39,7 @@ func installFakeFRR(t *testing.T, env *fakeFrrEnv) {
 
 		return env.syntaxErr
 	}
-	frrReload = func(_ context.Context, path string) error {
+	frrReload = func(_ context.Context, path, _ string, _ time.Duration) error {
 		env.reloadCalls++
 		env.reloadedPaths = append(env.reloadedPaths, path)
 		if env.reloadCalls-1 < len(env.reloadErrs) {
