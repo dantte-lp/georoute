@@ -39,7 +39,7 @@ endpoint). Maintain an operator-controlled list and pass it via
 ```bash
 cat > /etc/georoute/extras-ru-v4.list <<'EOF'
 # Operator-maintained additions to ru_v4 set
-# ddos-guard CDN (Belize ASN, not in RIPE-RU)
+# Example: a CDN registered to a non-RU ASN that you want routed via RU exit
 203.0.113.0/22
 198.51.100.0/22
 EOF
