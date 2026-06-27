@@ -74,7 +74,7 @@ sudo systemctl enable --now nft-pbr.service
 ```bash
 sudo ip -4 rule add fwmark 0x201 lookup 100 priority 100
 sudo ip -6 rule add fwmark 0x201 lookup 100 priority 100
-sudo ip -4 route add default via 91.218.113.129 dev ens1 table 100
+sudo ip -4 route add default via 198.51.100.1 dev ens1 table 100
 sudo ip -6 route add default dev sit1 table 100
 ```
 
@@ -182,7 +182,7 @@ journalctl -u georoute.service -n 50
 2. В `/etc/georoute/ru.env` добавить daemon-only переменные:
 
    ```env
-   GEOROUTE_HTTP_ADDR=127.0.0.1:9494
+   GEOROUTE_HTTP_ADDR=127.0.0.1:9090
    GEOROUTE_LOG_FORMAT=json
    GEOROUTE_LOG_LEVEL=info
    GEOROUTE_REFRESH_INTERVAL=12h
@@ -214,24 +214,24 @@ journalctl -u georoute.service -n 50
 5. Проверка:
 
    ```bash
-   curl -sf http://127.0.0.1:9494/live      # 200
-   curl -sf http://127.0.0.1:9494/ready     # 200 после первого успешного цикла
-   curl -sf http://127.0.0.1:9494/metrics | grep georoute_runs_total
+   curl -sf http://127.0.0.1:9090/live      # 200
+   curl -sf http://127.0.0.1:9090/ready     # 200 после первого успешного цикла
+   curl -sf http://127.0.0.1:9090/metrics | grep georoute_runs_total
    ```
 
 ### Выбор порта
 
-Default healthcheck-библиотеки — `:8080`; команда обычно использует
-`:9090` (Prometheus-конвенция). **Выбирайте свободный порт per host** —
-`9090` часто занят другими observability-сервисами (crowdsec-ocserv-bouncer
-на dev-04, например). Биндите на `127.0.0.1:<port>`, если scrape target
-не должен ходить в LAN; иначе ставьте reverse proxy впереди и держите
-сам бинарь на localhost.
+Default healthcheck-библиотеки — `:8080`; Prometheus-конвенция —
+`:9090`. **Выбирайте свободный порт per host** — эти порты часто
+заняты соседними observability-сервисами (node_exporter, сам
+Prometheus, crowdsec-бунсер и т.п.). Биндите на `127.0.0.1:<port>`,
+если scrape target не должен ходить в LAN; иначе ставьте reverse
+proxy впереди и держите сам бинарь на localhost.
 
 ### Source-side пример
 
 Канонический unit-файл — в
 [`deploy/systemd/georoute@.service`](../deploy/systemd/georoute@.service),
-с daemon-режим diff'ом в комментарии в конце для copy-paste. Ansible
-role в `polyexit-prod` рендерит оба варианта из одного шаблона через
-`georoute_mode: oneshot | daemon`.
+с daemon-режим diff'ом в комментарии в конце для copy-paste.
+Ansible-роль может рендерить оба варианта из одного шаблона через
+переменную `georoute_mode: oneshot | daemon`.

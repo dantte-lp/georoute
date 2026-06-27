@@ -50,12 +50,10 @@
   exit).
 
 ### Эксплуатация
-- Новый файл: `roles/georoute/defaults/main.yml` в polyexit-prod
-  с toggle `georoute_mode: oneshot | daemon` + env-vars для новых
-  флагов.
-- dev-04 переключён в daemon-режим (`127.0.0.1:9494`, рефреш каждые
-  12h, log-format=json). `9090` на dev-04 занят crowdsec
-  ocserv-bouncer'ом — переехали на 9494.
+- Пример Ansible-роли: toggle `georoute_mode: oneshot | daemon` +
+  env-vars матчат новые флаги. Daemon-режим должен биндиться на
+  `127.0.0.1:<port>`; убедитесь что порт свободен per host — `:9090`
+  это team-convention, но часто занят соседними observability-сервисами.
 
 [2.1.0]: https://github.com/dantte-lp/georoute/releases/tag/v2.1.0
 

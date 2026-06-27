@@ -74,7 +74,7 @@ These are deployment-specific (which uplink, which gateway):
 ```bash
 sudo ip -4 rule add fwmark 0x201 lookup 100 priority 100
 sudo ip -6 rule add fwmark 0x201 lookup 100 priority 100
-sudo ip -4 route add default via 91.218.113.129 dev ens1 table 100
+sudo ip -4 route add default via 198.51.100.1 dev ens1 table 100
 sudo ip -6 route add default dev sit1 table 100
 ```
 
@@ -183,7 +183,7 @@ When oneshot is fine:
 2. Edit `/etc/georoute/ru.env` to add the daemon-only knobs:
 
    ```env
-   GEOROUTE_HTTP_ADDR=127.0.0.1:9494
+   GEOROUTE_HTTP_ADDR=127.0.0.1:9090
    GEOROUTE_LOG_FORMAT=json
    GEOROUTE_LOG_LEVEL=info
    GEOROUTE_REFRESH_INTERVAL=12h
@@ -216,24 +216,25 @@ When oneshot is fine:
 5. Verify:
 
    ```bash
-   curl -sf http://127.0.0.1:9494/live      # 200
-   curl -sf http://127.0.0.1:9494/ready     # 200 once the first cycle completes
-   curl -sf http://127.0.0.1:9494/metrics | grep georoute_runs_total
+   curl -sf http://127.0.0.1:9090/live      # 200
+   curl -sf http://127.0.0.1:9090/ready     # 200 once the first cycle completes
+   curl -sf http://127.0.0.1:9090/metrics | grep georoute_runs_total
    ```
 
 ### Port choice
 
-The healthcheck library defaults to `:8080`; the team convention is
-`:9090` to match Prometheus. **Pick a free port per host** — `9090`
-is also commonly used by other observability services
-(crowdsec-ocserv-bouncer on dev-04, for example). Bind to
-`127.0.0.1:<port>` unless the scrape target needs LAN access; in that
-case put a reverse proxy in front and keep the binary on localhost.
+The healthcheck library defaults to `:8080`; the Prometheus
+convention is `:9090`. **Pick a free port per host** — these ports
+are commonly taken by adjacent observability services
+(node_exporter, Prometheus itself, a crowdsec bouncer, etc.). Bind
+to `127.0.0.1:<port>` unless the scrape target needs LAN access; in
+that case put a reverse proxy in front and keep the binary on
+localhost.
 
 ### Source-side example
 
 The canonical unit file lives at
 [`deploy/systemd/georoute@.service`](../deploy/systemd/georoute@.service)
 with the daemon-mode diff commented out at the bottom for copy-paste.
-The Ansible role in `polyexit-prod` renders both shapes from one
-template via `georoute_mode: oneshot | daemon`.
+An Ansible role can render both shapes from one template via a
+`georoute_mode: oneshot | daemon` variable.

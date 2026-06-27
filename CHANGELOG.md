@@ -49,12 +49,11 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   in-flight work before returning, so SIGTERM is properly ordered.
 
 ### Operations
-- New file: `roles/georoute/defaults/main.yml` in the polyexit-prod
-  role with `georoute_mode: oneshot | daemon` toggle plus the new
-  flag-backed env vars.
-- dev-04 switched to daemon mode (bind `127.0.0.1:9494`, refresh
-  every 12h, log-format=json). The team-default `:9090` was occupied
-  by the crowdsec ocserv-bouncer; pick a free port per host.
+- Ansible role example: `georoute_mode: oneshot | daemon` toggle plus
+  env vars matching the new flags. Operators picking up the daemon
+  shape should bind `127.0.0.1:<port>` and make sure the port is free
+  per host — `:9090` is the team convention but is commonly occupied
+  by adjacent observability services.
 
 [2.1.0]: https://github.com/dantte-lp/georoute/releases/tag/v2.1.0
 

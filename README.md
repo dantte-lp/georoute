@@ -253,8 +253,8 @@ Core: multi-country flag-driven, timer-template per ISO code. Backward
 compatible with v2.0 / v1 deploys — every new flag defaults to its
 pre-existing value, so no `.env` rewrites are required to upgrade.
 
-Production: dev-04 (RU exit) runs in daemon mode with `/metrics` bound
-to localhost (scraped via internal Prometheus when the VM stack lands).
+Deployed as a long-lived daemon by the operator's Ansible role with
+`/metrics` bound to localhost.
 
 Highlights since v2.0:
 - 8 new operator flags expose every previously hard-coded timeout / tool
