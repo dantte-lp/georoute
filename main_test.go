@@ -38,6 +38,8 @@ func TestApplyDefaults(t *testing.T) {
 				cacheMaxAge:     7 * 24 * time.Hour,
 				lastSuccessFile: "/var/lib/georoute/last-success-ru",
 				readyMaxAge:     24 * time.Hour,
+				logFormat:       logFormatText,
+				logLevel:        "info",
 			},
 		},
 		{
@@ -55,6 +57,8 @@ func TestApplyDefaults(t *testing.T) {
 				cacheMaxAge:     7 * 24 * time.Hour,
 				lastSuccessFile: "/var/lib/georoute/last-success-uz",
 				readyMaxAge:     24 * time.Hour,
+				logFormat:       logFormatText,
+				logLevel:        "info",
 			},
 		},
 		{
@@ -72,6 +76,8 @@ func TestApplyDefaults(t *testing.T) {
 				cacheMaxAge:     7 * 24 * time.Hour,
 				lastSuccessFile: "/var/lib/georoute/last-success-kz",
 				readyMaxAge:     24 * time.Hour,
+				logFormat:       logFormatText,
+				logLevel:        "info",
 			},
 		},
 	}

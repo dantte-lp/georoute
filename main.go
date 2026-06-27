@@ -16,7 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/netip"
 	"os"
@@ -53,10 +53,11 @@ const (
 // builds (e.g. `go run .`).
 var version = "dev"
 
-// defaultLogf wraps log.Printf so other files can use logf without
-// importing log (and tests can stub the variable instead of the package).
+// defaultLogf wraps slog at info level so cache.go can use logf
+// without importing slog (and tests can stub the variable instead of
+// the package).
 func defaultLogf(format string, args ...any) {
-	log.Printf(format, args...)
+	slog.Info(fmt.Sprintf(format, args...))
 }
 
 // Static error values let callers errors.Is them and satisfy err113.
@@ -101,6 +102,8 @@ type cliFlags struct {
 	cacheFile       string
 	httpAddr        string
 	lastSuccessFile string
+	logFormat       string
+	logLevel        string
 	cacheMaxAge     time.Duration
 	readyMaxAge     time.Duration
 	reloadOK        bool
@@ -146,6 +149,12 @@ func (f *cliFlags) applyDefaults() {
 	if f.readyMaxAge == 0 {
 		f.readyMaxAge = 24 * time.Hour
 	}
+	if f.logFormat == "" {
+		f.logFormat = logFormatText
+	}
+	if f.logLevel == "" {
+		f.logLevel = "info"
+	}
 }
 
 // markers returns the four marker comment lines used to delimit per-country
@@ -183,6 +192,8 @@ func realMain() int {
 	flag.StringVar(&flags.httpAddr, "http-addr", "", "listen address for the /live + /ready + /debug/pprof HTTP server; empty disables it; when set, the process parks on SIGTERM after the oneshot work completes (e.g. :9090)")
 	flag.StringVar(&flags.lastSuccessFile, "last-success-file", "", "path to the timestamp marker written after each successful run; /readyz reports unhealthy when missing or stale (default /var/lib/georoute/last-success-<cc>)")
 	flag.DurationVar(&flags.readyMaxAge, "ready-max-age", 0, "maximum age of last-success before /readyz starts returning 503 (default 24h)")
+	flag.StringVar(&flags.logFormat, "log-format", "", "log output format: text|json (default text — switch to json for systemd-journald + structured ingest)")
+	flag.StringVar(&flags.logLevel, "log-level", "", "minimum log level: debug|info|warn|error (default info)")
 	flag.Parse()
 
 	if showVersion {
@@ -193,18 +204,36 @@ func realMain() int {
 
 	flags.applyDefaults()
 
-	log.SetFlags(log.LstdFlags | log.LUTC)
-	log.SetPrefix(fmt.Sprintf("georoute[%s] ", strings.ToUpper(flags.country)))
+	logger, err := newLogger(flags.logFormat, flags.logLevel, os.Stderr)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "logger:", err)
+
+		return 1
+	}
+	logger = logger.With(slog.String("country", strings.ToLower(flags.country)))
+	// Replace the stdlib default logger so any code path still using
+	// log.Printf (e.g. exec wrappers) flows through the configured
+	// handler at info level. Tests of new code should use logger
+	// directly.
+	slog.SetDefault(logger)
 
 	// Generous outer budget: 60s fetch (with retries) + 30s nft + 3min reload.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
+	// run_id is stamped into every log entry from here on so a JSON
+	// log stream can be sliced per cycle and joined to /metrics
+	// observations carrying the same id. We also re-bind the stdlib
+	// default so any leftover log.Printf path inherits the same field.
+	runID := newRunID()
+	logger = withRunID(logger, runID)
+	slog.SetDefault(logger)
+
 	// Exclusive lock prevents two timer cycles (or timer + manual) from
 	// racing on frr.conf.new or frr-reload.py.
 	lockF, err := acquireLock(flags.lockFile)
 	if err != nil {
-		log.Printf("lock: %v", err)
+		logger.Error("acquire lock", slog.String("err", err.Error()), slog.String("lock_file", flags.lockFile))
 
 		return 1
 	}
@@ -221,15 +250,17 @@ func realMain() int {
 	if flags.httpAddr != "" {
 		hs, err = newHealthServer(flags.httpAddr, flags.lastSuccessFile, strings.ToLower(flags.country), flags.readyMaxAge)
 		if err != nil {
-			log.Printf("health server: %v", err)
+			logger.Error("health server init", slog.String("err", err.Error()))
 
 			return 1
 		}
 		go func() {
-			log.Printf("health: listening on %s (/live, /ready, /debug/pprof/)", flags.httpAddr)
+			logger.Info("health server listening",
+				slog.String("addr", flags.httpAddr),
+				slog.String("endpoints", "/live /ready /metrics /debug/pprof/"))
 			servErr := hs.start(ctx)
 			if servErr != nil {
-				log.Printf("health server exited: %v", servErr)
+				logger.Warn("health server exited", slog.String("err", servErr.Error()))
 			}
 		}()
 	}
@@ -239,9 +270,9 @@ func realMain() int {
 		m = hs.metrics
 	}
 	runStart := time.Now()
-	err = run(ctx, flags, m)
+	err = run(ctx, flags, logger, m)
 	if err != nil {
-		log.Printf("error: %v", err)
+		logger.Error("run failed", slog.String("err", err.Error()), slog.Duration("elapsed", time.Since(runStart)))
 		if m != nil {
 			m.observeRun(metricResultError, time.Since(runStart))
 		}
@@ -263,7 +294,7 @@ func realMain() int {
 	if flags.httpAddr != "" || flags.lastSuccessFile != "" {
 		writeErr := writeLastSuccess(flags.lastSuccessFile)
 		if writeErr != nil {
-			log.Printf("warn: last-success write failed: %v", writeErr)
+			logger.Warn("last-success write failed", slog.String("err", writeErr.Error()))
 		}
 	}
 
@@ -271,7 +302,7 @@ func realMain() int {
 	// the flock for the rest of the cycle so a second timer-fired
 	// instance is rejected fast instead of overlapping.
 	if hs != nil {
-		log.Printf("oneshot complete; parking until SIGTERM (timer will fire a new process at the next interval)")
+		logger.Info("oneshot complete; parking until SIGTERM (timer fires the next process)")
 		<-parkContext().Done()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_ = hs.shutdown(shutdownCtx)
@@ -309,8 +340,8 @@ func acquireLock(path string) (*os.File, error) {
 	return f, nil
 }
 
-func run(ctx context.Context, f cliFlags, m *metrics) error {
-	log.Printf("fetching RIPE Stat resources for %s", strings.ToUpper(f.country))
+func run(ctx context.Context, f cliFlags, logger *slog.Logger, m *metrics) error {
+	logger.Info("fetching RIPE Stat resources")
 
 	fetchStart := time.Now()
 	raw, source, err := fetchWithCache(ctx, f.feedURL, f.cacheFile, f.cacheMaxAge)
@@ -324,8 +355,11 @@ func run(ctx context.Context, f cliFlags, m *metrics) error {
 	if err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
-	log.Printf("raw: %d v4 prefixes, %d v6 prefixes (source=%s)",
-		len(raw.Data.Resources.IPv4), len(raw.Data.Resources.IPv6), source)
+	logger.Info("raw fetched",
+		slog.Int("v4_count", len(raw.Data.Resources.IPv4)),
+		slog.Int("v6_count", len(raw.Data.Resources.IPv6)),
+		slog.String("source", source.String()),
+		slog.Duration("duration", time.Since(fetchStart)))
 
 	// Extras are operator-maintained prefix lists (e.g. non-RIPE-country
 	// CDN ranges). They're merged before aggregate so dedup / minimal-cover
@@ -339,17 +373,19 @@ func run(ctx context.Context, f cliFlags, m *metrics) error {
 		return fmt.Errorf("load extras v6: %w", err)
 	}
 	if f.extrasV4File != "" {
-		log.Printf("extras: loaded %d v4 prefixes from %s", len(extrasV4), f.extrasV4File)
+		logger.Info("extras loaded", slog.String("family", "v4"), slog.Int("count", len(extrasV4)), slog.String("file", f.extrasV4File))
 	}
 	if f.extrasV6File != "" {
-		log.Printf("extras: loaded %d v6 prefixes from %s", len(extrasV6), f.extrasV6File)
+		logger.Info("extras loaded", slog.String("family", "v6"), slog.Int("count", len(extrasV6)), slog.String("file", f.extrasV6File))
 	}
 
 	v4Parsed := append(parsePrefixes(raw.Data.Resources.IPv4), extrasV4...)
 	v6Parsed := append(parsePrefixes(raw.Data.Resources.IPv6), extrasV6...)
 	v4Agg := aggregate(v4Parsed)
 	v6Agg := aggregate(v6Parsed)
-	log.Printf("aggregated: %d v4, %d v6", len(v4Agg), len(v6Agg))
+	logger.Info("aggregated",
+		slog.Int("v4_count", len(v4Agg)),
+		slog.Int("v6_count", len(v6Agg)))
 
 	if m != nil {
 		m.setPrefixCount("v4", "ripe", len(raw.Data.Resources.IPv4))
@@ -362,13 +398,16 @@ func run(ctx context.Context, f cliFlags, m *metrics) error {
 
 	v4Block := renderNetworks(v4Agg, f.routeMap)
 	v6Block := renderNetworks(v6Agg, f.routeMap)
-	log.Printf("v4 hash=%s v6 hash=%s", hashOf(v4Block)[:12], hashOf(v6Block)[:12])
+	logger.Debug("rendered",
+		slog.String("v4_hash", hashOf(v4Block)[:12]),
+		slog.String("v6_hash", hashOf(v6Block)[:12]))
 
 	if f.dryRun {
-		printSample("v4-bgp", v4Block)
-		printSample("v6-bgp", v6Block)
-		log.Printf("nft %s set would have %d elements; %s set %d",
-			f.nftSetV4, len(v4Agg), f.nftSetV6, len(v6Agg))
+		printSample(logger, "v4-bgp", v4Block)
+		printSample(logger, "v6-bgp", v6Block)
+		logger.Info("dry-run summary",
+			slog.String("nft_set_v4", f.nftSetV4), slog.Int("v4_count", len(v4Agg)),
+			slog.String("nft_set_v6", f.nftSetV6), slog.Int("v6_count", len(v6Agg)))
 
 		return nil
 	}
@@ -390,6 +429,10 @@ func run(ctx context.Context, f cliFlags, m *metrics) error {
 		if err != nil {
 			return fmt.Errorf("apply nft: %w", err)
 		}
+		logger.Info("nft sets updated",
+			slog.String("v4_set", f.nftSetV4), slog.Int("v4_count", len(v4Agg)),
+			slog.String("v6_set", f.nftSetV6), slog.Int("v6_count", len(v6Agg)),
+			slog.Duration("duration", time.Since(nftStart)))
 	}
 
 	cur, err := os.ReadFile(f.frrConf)
@@ -408,7 +451,7 @@ func run(ctx context.Context, f cliFlags, m *metrics) error {
 	}
 
 	if !f.force && string(cur) == next {
-		log.Printf("frr.conf unchanged — skipping reload")
+		logger.Info("frr.conf unchanged — skipping reload")
 
 		return nil
 	}
@@ -425,7 +468,7 @@ func run(ctx context.Context, f cliFlags, m *metrics) error {
 	if err != nil {
 		return fmt.Errorf("apply frr.conf: %w", err)
 	}
-	log.Printf("frr.conf updated + reloaded")
+	logger.Info("frr.conf updated + reloaded", slog.Duration("duration", time.Since(frrStart)))
 
 	return nil
 }
@@ -456,7 +499,11 @@ func applyNft(ctx context.Context, f cliFlags, v4, v6 []netip.Prefix) error {
 	if err != nil {
 		return fmt.Errorf("nft -f: %w", err)
 	}
-	log.Printf("nft sets updated (%s=%d %s=%d)", f.nftSetV4, len(v4), f.nftSetV6, len(v6))
+	// Duplicated higher-level log emitted in run() carries run_id; this
+	// one is left as Debug for low-level diagnostic only.
+	slog.Debug("applyNft completed",
+		slog.String("v4_set", f.nftSetV4), slog.Int("v4_len", len(v4)),
+		slog.String("v6_set", f.nftSetV6), slog.Int("v6_len", len(v6)))
 
 	return nil
 }
@@ -479,7 +526,10 @@ func fetchWithRetry(ctx context.Context, url string) (*ripeResp, error) {
 	for attempt := 1; attempt <= retryAttempts; attempt++ {
 		if attempt > 1 {
 			backoff := time.Duration(attempt-1) * retryBaseDelay
-			log.Printf("fetch attempt %d/%d after %s backoff (last error: %v)", attempt, retryAttempts, backoff, lastErr)
+			slog.Info("fetch retry",
+				slog.Int("attempt", attempt), slog.Int("max", retryAttempts),
+				slog.Duration("backoff", backoff),
+				slog.String("last_err", lastErr.Error()))
 			select {
 			case <-ctx.Done():
 				return nil, fmt.Errorf("retry wait: %w", ctx.Err())
@@ -549,7 +599,7 @@ func parsePrefixes(raw []string) []netip.Prefix {
 
 		prefix, err := netip.ParsePrefix(clean)
 		if err != nil {
-			log.Printf("warn: skipping bad prefix %q: %v", clean, err)
+			slog.Warn("skipping bad prefix", slog.String("prefix", clean), slog.String("err", err.Error()))
 
 			continue
 		}
@@ -777,10 +827,10 @@ func hashOf(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func printSample(label, block string) {
+func printSample(logger *slog.Logger, label, block string) {
 	lines := strings.SplitN(block, "\n", sampleLines+1)
 	if len(lines) > sampleLines {
 		lines = lines[:sampleLines]
 	}
-	log.Printf("--- %s sample ---\n%s", label, strings.Join(lines, "\n"))
+	logger.Debug("bgp sample", slog.String("label", label), slog.String("body", strings.Join(lines, "\n")))
 }

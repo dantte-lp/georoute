@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/AOzhogin/healthcheck v1.3.0
+	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/sys v0.46.0
 )
