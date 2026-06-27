@@ -32,13 +32,13 @@ neighbor doesn't permit the community. Edit, reload.
 
 ```bash
 # 1. Is the address in the set?
-nft get element inet pbr ru_v4 { 1.2.3.4 }   # should not error
+nft get element inet pbr ru_v4 { 198.51.100.10 }   # should not error
 
 # 2. Does the routing decision use the mark?
-ip -4 route get 1.2.3.4 mark 0x201           # should show table 100
+ip -4 route get 198.51.100.10 mark 0x201           # should show table 100
 
 # 3. Is the mark actually being set in practice? (Add a temporary counter.)
-nft 'add rule inet pbr prerouting ip daddr 1.2.3.4 counter comment trace'
+nft 'add rule inet pbr prerouting ip daddr 198.51.100.10 counter comment trace'
 # ... generate traffic ...
 nft list chain inet pbr prerouting | grep trace
 nft -a list chain inet pbr prerouting    # find the handle
