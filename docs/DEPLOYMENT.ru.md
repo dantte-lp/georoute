@@ -155,3 +155,83 @@ journalctl -u georoute.service -n 50
 (`CAP_NET_ADMIN`, `CAP_NET_RAW`). Запуск под менее привилегированным
 пользователем требует делегирования этих cap'ов и записи в `/etc/frr` —
 возможно, но не дефолт.
+
+## Daemon-режим (v2.1+)
+
+Вместо `Type=oneshot` + 12-часовой таймер `georoute` может крутиться
+как long-lived `Type=simple` сервис. Внутренний тикер
+`--refresh-interval` заменяет systemd-таймер.
+
+Когда выбирать daemon:
+- Нужен стабильный target для скрейпа `/metrics`.
+- Нужны `/live` и `/ready` для внешнего оркестратора.
+- Хочется per-cycle `run_id` корреляции в journald.
+
+Когда oneshot ок:
+- Single-node, без оркестратора.
+- Предпочитаете, чтобы unit "падал видимо в journalctl" между циклами, а не следить за long-lived процессом.
+
+### Переключение в daemon
+
+1. Снести таймер:
+
+   ```bash
+   systemctl disable --now georoute@ru.timer
+   ```
+
+2. В `/etc/georoute/ru.env` добавить daemon-only переменные:
+
+   ```env
+   GEOROUTE_HTTP_ADDR=127.0.0.1:9494
+   GEOROUTE_LOG_FORMAT=json
+   GEOROUTE_LOG_LEVEL=info
+   GEOROUTE_REFRESH_INTERVAL=12h
+   ```
+
+3. Поправить `/etc/systemd/system/georoute@.service`:
+
+   ```ini
+   Type=simple
+   Restart=on-failure
+   RestartSec=5s
+   TimeoutStopSec=15s
+   EnvironmentFile=/etc/georoute/%i.env
+   ExecStart=/usr/local/bin/georoute \
+       ... existing flags ... \
+       --http-addr=${GEOROUTE_HTTP_ADDR} \
+       --log-format=${GEOROUTE_LOG_FORMAT} \
+       --log-level=${GEOROUTE_LOG_LEVEL} \
+       --refresh-interval=${GEOROUTE_REFRESH_INTERVAL}
+   ```
+
+4. Reload + start:
+
+   ```bash
+   systemctl daemon-reload
+   systemctl enable --now georoute@ru.service
+   ```
+
+5. Проверка:
+
+   ```bash
+   curl -sf http://127.0.0.1:9494/live      # 200
+   curl -sf http://127.0.0.1:9494/ready     # 200 после первого успешного цикла
+   curl -sf http://127.0.0.1:9494/metrics | grep georoute_runs_total
+   ```
+
+### Выбор порта
+
+Default healthcheck-библиотеки — `:8080`; команда обычно использует
+`:9090` (Prometheus-конвенция). **Выбирайте свободный порт per host** —
+`9090` часто занят другими observability-сервисами (crowdsec-ocserv-bouncer
+на dev-04, например). Биндите на `127.0.0.1:<port>`, если scrape target
+не должен ходить в LAN; иначе ставьте reverse proxy впереди и держите
+сам бинарь на localhost.
+
+### Source-side пример
+
+Канонический unit-файл — в
+[`deploy/systemd/georoute@.service`](../deploy/systemd/georoute@.service),
+с daemon-режим diff'ом в комментарии в конце для copy-paste. Ansible
+role в `polyexit-prod` рендерит оба варианта из одного шаблона через
+`georoute_mode: oneshot | daemon`.

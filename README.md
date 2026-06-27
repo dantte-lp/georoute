@@ -122,6 +122,8 @@ georoute --country=RU --force
 
 ## CLI flags
 
+Country + naming (since v1):
+
 ```text
 -country string         ISO-3166 alpha-2 country code (RU, UZ, KZ, …) (default "RU")
 -route-map string       FRR route-map name                          (default MARK-<CC>-EXIT)
@@ -135,6 +137,38 @@ georoute --country=RU --force
 -nft                    atomically replace nft set <cc>_v4 / <cc>_v6 (default true)
 -dry-run                print summary without writing
 -force                  force write even if unchanged
+```
+
+Operator data + state (added in v2.0):
+
+```text
+-extras-v4-file string  operator-maintained IPv4 prefix list merged with RIPE feed (empty = none)
+-extras-v6-file string  operator-maintained IPv6 prefix list merged with RIPE feed (empty = none)
+-cache-file string      gzipped JSON cache of last successful RIPE response (default /var/lib/georoute/feed-<cc>.json.gz)
+-cache-max-age duration max age of the cache before it is refused (default 7d)
+-last-success-file str  timestamp marker written after each successful run (default /var/lib/georoute/last-success-<cc>)
+```
+
+Observability (added in v2.0):
+
+```text
+-http-addr string       listen address for /live + /ready + /metrics + /debug/pprof (empty disables it; e.g. :9090)
+-ready-max-age duration max age of last-success before /readyz returns 503 (default 24h)
+-log-format string      log output format: text|json (default text)
+-log-level string       minimum log level: debug|info|warn|error (default info)
+```
+
+Tunable timeouts + tool paths (added in v2.1):
+
+```text
+-http-timeout duration       RIPE Stat per-request timeout (default 60s)
+-frr-reload-timeout duration frr-reload.py timeout         (default 3m)
+-nft-timeout duration        nft set replacement timeout   (default 30s)
+-retry-attempts int          RIPE fetch attempts before cache fallback (default 3)
+-retry-base-delay duration   linear retry backoff base     (default 2s)
+-frr-reload-script string    path to frr-reload.py        (default /usr/lib/frr/frr-reload.py)
+-nft-binary string           path to nft                   (default /usr/sbin/nft)
+-refresh-interval duration   when >0 + --http-addr set: daemon ticker (default 0 = oneshot)
 ```
 
 ## Safety properties
@@ -152,13 +186,23 @@ georoute --country=RU --force
 
 ## Operating model
 
+Two deployment shapes — pick one per host:
+
 ```text
-                   RIPE Stat (HTTPS)
+                  RIPE Stat (HTTPS)
                          │
+       ┌─────────────────┴─────────────────┐
+       ▼                                   ▼
+  ONESHOT mode                       DAEMON mode (since v2.1)
+  systemd timer fires unit           Type=simple, long-lived
+  every --http-addr=                 --refresh-interval ticker
+  empty, run-once-exit               --http-addr=:port serves
+                                     /live /ready /metrics
+       └─────────────────┬─────────────────┘
                          ▼
                     ┌──────────┐
-                    │ georoute │  ── timer-driven, OnUnitActiveSec=12h, 30min jitter
-                    └──────────┘
+                    │ georoute │  ──► cache fallback (v2.0):
+                    └──────────┘      RIPE 5xx → /var/lib/georoute/feed-<cc>.json.gz
                        │      │
               ┌────────┘      └─────────┐
               ▼                          ▼
@@ -166,6 +210,8 @@ georoute --country=RU --force
      │  /etc/frr/      │         │  nft set               │
      │  frr.conf       │         │  inet pbr <cc>_v4      │
      │  (markers)      │         │  inet pbr <cc>_v6      │
+     │  + rollback     │         │                        │
+     │  on syntax err  │         │                        │
      └─────────────────┘         └────────────────────────┘
               │                              │
               ▼                              ▼
@@ -175,6 +221,18 @@ georoute --country=RU --force
       BGP UPDATE to peer           mark 0x<x> → table <N>
                                    → local uplink (NAT44/NAT66)
 ```
+
+Optional `--http-addr` adds:
+
+```text
+GET /live       → 200 (process alive — never touches RIPE/disk)
+GET /ready      → 200 if last-success within --ready-max-age, else 503
+GET /metrics    → Prometheus exposition (app + healthcheck library + Go runtime)
+GET /debug/pprof/* → goroutine/heap/allocs/cpu/trace profiles
+```
+
+In daemon mode, every refresh tick gets a fresh `run_id` so JSON logs
+can be sliced per cycle.
 
 ## Documentation
 
@@ -189,9 +247,28 @@ Russian translations are available alongside (`docs/<NAME>.ru.md`).
 
 ## Status
 
-`v2.0.0` — multi-country flag-driven, single-shot systemd replaced by a
-template unit per ISO code. Backward-compatible defaults for existing RU
-deploys (no flag = `--country=RU`).
+**`v2.1.0` — stable, observability + optional daemon mode.**
+
+Core: multi-country flag-driven, timer-template per ISO code. Backward
+compatible with v2.0 / v1 deploys — every new flag defaults to its
+pre-existing value, so no `.env` rewrites are required to upgrade.
+
+Production: dev-04 (RU exit) runs in daemon mode with `/metrics` bound
+to localhost (scraped via internal Prometheus when the VM stack lands).
+
+Highlights since v2.0:
+- 8 new operator flags expose every previously hard-coded timeout / tool
+  path. Tunable per host via env vars.
+- `--refresh-interval=N` opts the binary into daemon mode: long-lived
+  `Type=simple` unit, internal ticker, parks on SIGTERM. Timer becomes
+  irrelevant in this shape.
+- `/metrics` adds `georoute_skipped_overlap_total` for diagnosing slow
+  cycles that collide with the next tick.
+- Sync HTTP bind: `--http-addr` failures now exit non-zero immediately
+  instead of leaking into a dead goroutine.
+- Per-cycle `run_id` for daemon logs.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full v2.0 → v2.1 list.
 
 ## License
 
