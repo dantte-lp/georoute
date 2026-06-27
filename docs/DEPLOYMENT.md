@@ -74,7 +74,7 @@ These are deployment-specific (which uplink, which gateway):
 ```bash
 sudo ip -4 rule add fwmark 0x201 lookup 100 priority 100
 sudo ip -6 rule add fwmark 0x201 lookup 100 priority 100
-sudo ip -4 route add default via 91.218.113.129 dev ens1 table 100
+sudo ip -4 route add default via 198.51.100.1 dev ens1 table 100
 sudo ip -6 route add default dev sit1 table 100
 ```
 
@@ -156,3 +156,85 @@ The bundled systemd unit runs the service as `root`, sandboxed with
 (`CAP_NET_ADMIN`, `CAP_NET_RAW`). Run as a less-privileged user requires
 delegating those capabilities and write access to `/etc/frr` — possible but
 not the default.
+
+## Daemon mode (v2.1+)
+
+Instead of `Type=oneshot` driven by a 12 h timer, `georoute` can run as
+a long-lived `Type=simple` service. The internal `--refresh-interval`
+ticker replaces the systemd timer.
+
+When to choose daemon mode:
+- You want a stable `/metrics` scrape target (timers come and go).
+- You need `/live` and `/ready` for an external orchestrator.
+- You want per-cycle `run_id` correlation in journald.
+
+When oneshot is fine:
+- Single-node deployment with no orchestrator.
+- You'd rather have the unit "fail visibly in journalctl" between cycles than have a long-lived process to monitor.
+
+### Switching to daemon
+
+1. Drop the timer:
+
+   ```bash
+   systemctl disable --now georoute@ru.timer
+   ```
+
+2. Edit `/etc/georoute/ru.env` to add the daemon-only knobs:
+
+   ```env
+   GEOROUTE_HTTP_ADDR=127.0.0.1:9090
+   GEOROUTE_LOG_FORMAT=json
+   GEOROUTE_LOG_LEVEL=info
+   GEOROUTE_REFRESH_INTERVAL=12h
+   ```
+
+3. Patch the unit file (`/etc/systemd/system/georoute@.service`) so the
+   `[Service]` block reads:
+
+   ```ini
+   Type=simple
+   Restart=on-failure
+   RestartSec=5s
+   TimeoutStopSec=15s
+   EnvironmentFile=/etc/georoute/%i.env
+   ExecStart=/usr/local/bin/georoute \
+       ... existing flags ... \
+       --http-addr=${GEOROUTE_HTTP_ADDR} \
+       --log-format=${GEOROUTE_LOG_FORMAT} \
+       --log-level=${GEOROUTE_LOG_LEVEL} \
+       --refresh-interval=${GEOROUTE_REFRESH_INTERVAL}
+   ```
+
+4. Reload + start:
+
+   ```bash
+   systemctl daemon-reload
+   systemctl enable --now georoute@ru.service
+   ```
+
+5. Verify:
+
+   ```bash
+   curl -sf http://127.0.0.1:9090/live      # 200
+   curl -sf http://127.0.0.1:9090/ready     # 200 once the first cycle completes
+   curl -sf http://127.0.0.1:9090/metrics | grep georoute_runs_total
+   ```
+
+### Port choice
+
+The healthcheck library defaults to `:8080`; the Prometheus
+convention is `:9090`. **Pick a free port per host** — these ports
+are commonly taken by adjacent observability services
+(node_exporter, Prometheus itself, a crowdsec bouncer, etc.). Bind
+to `127.0.0.1:<port>` unless the scrape target needs LAN access; in
+that case put a reverse proxy in front and keep the binary on
+localhost.
+
+### Source-side example
+
+The canonical unit file lives at
+[`deploy/systemd/georoute@.service`](../deploy/systemd/georoute@.service)
+with the daemon-mode diff commented out at the bottom for copy-paste.
+An Ansible role can render both shapes from one template via a
+`georoute_mode: oneshot | daemon` variable.

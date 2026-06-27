@@ -37,10 +37,28 @@ nftables interval-set индексирован деревом (O(log n) на loo
 
 ## Статус
 
-Pre-1.0. Внутренняя инфра-утилита. Production-ready для паттерна
-двух-сайтового exit, описанного в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-Выбор страны сейчас хардкоден на `RU` против RIPE Stat; сделать источник/страну
-подключаемыми — в плане.
+**`v2.1.0` — стабилен, наблюдаемость + опциональный daemon-режим.**
+
+Ядро: multi-country, шаблонная systemd-юнит-инстанс на ISO-код.
+Обратно совместим с v2.0 / v1: каждый новый флаг по умолчанию
+выставлен в pre-existing значение — `.env` переписывать не нужно.
+
+Разворачивается операторской Ansible-ролью как long-lived daemon
+с `/metrics` на localhost.
+
+С v2.0:
+- 8 новых операторских флагов покрывают всё, что раньше было
+  hard-coded (таймауты, пути к утилитам, число попыток ретрая).
+- `--refresh-interval=N` включает daemon-режим: long-lived
+  `Type=simple` юнит, внутренний тикер, паркуется на SIGTERM.
+  Systemd-таймер в этом режиме не используется.
+- `/metrics` добавил `georoute_skipped_overlap_total` —
+  диагностика длительных циклов.
+- Sync HTTP bind: при ошибке `--http-addr` процесс выходит с
+  кодом 1, а не паркуется в `goroutine`-leak.
+- Per-cycle `run_id` в daemon-логах.
+
+Подробности в [`CHANGELOG.ru.md`](CHANGELOG.ru.md).
 
 ## Быстрый старт
 

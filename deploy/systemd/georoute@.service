@@ -5,8 +5,8 @@ After=network-online.target frr.service
 Wants=network-online.target
 
 # This file is the canonical oneshot example. Daemon-mode variant is
-# documented at the bottom of the file. The Ansible role in
-# polyexit-prod renders a similar unit with mode toggled via inventory.
+# documented at the bottom of the file. An Ansible role can render a
+# similar unit with the mode toggled via inventory.
 
 [Service]
 Type=oneshot
