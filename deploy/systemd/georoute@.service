@@ -4,6 +4,10 @@ Documentation=https://github.com/dantte-lp/georoute
 After=network-online.target frr.service
 Wants=network-online.target
 
+# This file is the canonical oneshot example. Daemon-mode variant is
+# documented at the bottom of the file. The Ansible role in
+# polyexit-prod renders a similar unit with mode toggled via inventory.
+
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/georoute/%i.env
@@ -16,12 +20,22 @@ ExecStart=/usr/local/bin/georoute \
     --marker-prefix=${GEOROUTE_MARKER_PREFIX} \
     --frr-conf=${GEOROUTE_FRR_CONF} \
     --extras-v4-file=${GEOROUTE_EXTRAS_V4_FILE} \
-    --extras-v6-file=${GEOROUTE_EXTRAS_V6_FILE}
+    --extras-v6-file=${GEOROUTE_EXTRAS_V6_FILE} \
+    --cache-file=${GEOROUTE_CACHE_FILE} \
+    --cache-max-age=${GEOROUTE_CACHE_MAX_AGE} \
+    --last-success-file=${GEOROUTE_LAST_SUCCESS_FILE} \
+    --http-timeout=${GEOROUTE_HTTP_TIMEOUT} \
+    --frr-reload-timeout=${GEOROUTE_FRR_RELOAD_TIMEOUT} \
+    --nft-timeout=${GEOROUTE_NFT_TIMEOUT} \
+    --retry-attempts=${GEOROUTE_RETRY_ATTEMPTS} \
+    --retry-base-delay=${GEOROUTE_RETRY_BASE_DELAY} \
+    --frr-reload-script=${GEOROUTE_FRR_RELOAD_SCRIPT} \
+    --nft-binary=${GEOROUTE_NFT_BINARY}
 TimeoutStartSec=10min
 StandardOutput=journal
 StandardError=journal
 
-# Resource limits — feed runs every 12h, no need for much
+# Resource limits — feed runs every 12h (timer-driven), no need for much.
 MemoryHigh=128M
 MemoryMax=256M
 CPUQuota=50%
@@ -44,10 +58,13 @@ RestrictSUIDSGID=true
 # to operators auditing the unit (the bare "/run" is otherwise easy to
 # misread as "this unit doesn't touch FRR runtime state").
 # Extras files live read-only under /etc/georoute (see ReadOnlyPaths).
+# Cache + last-success live under /var/lib/georoute (StateDirectory).
 ReadWritePaths=/etc/frr /run
 ReadOnlyPaths=/etc/georoute
 RuntimeDirectory=georoute
 RuntimeDirectoryPreserve=yes
+StateDirectory=georoute
+StateDirectoryMode=0750
 
 # Needs CAP_NET_ADMIN to call nft and frr-reload.py (which spawns vtysh).
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
@@ -55,3 +72,23 @@ AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
 
 [Install]
 WantedBy=multi-user.target
+
+# ============================================================
+# Daemon-mode variant (replace the [Service] block above with):
+# ------------------------------------------------------------
+# Type=simple
+# Restart=on-failure
+# RestartSec=5s
+# TimeoutStopSec=15s            ; matches the binary's 10s graceful + buffer
+# EnvironmentFile=/etc/georoute/%i.env
+# ExecStart=/usr/local/bin/georoute \
+#     ... (all flags from oneshot above) \
+#     --http-addr=${GEOROUTE_HTTP_ADDR} \
+#     --log-format=${GEOROUTE_LOG_FORMAT} \
+#     --log-level=${GEOROUTE_LOG_LEVEL} \
+#     --refresh-interval=${GEOROUTE_REFRESH_INTERVAL}
+#
+# When --refresh-interval=12h is set, the binary runs the work
+# pipeline on an internal ticker; the systemd timer in this case is
+# *not* used (and the Ansible role disables it).
+# ============================================================
