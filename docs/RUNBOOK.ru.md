@@ -32,13 +32,13 @@ permit'ит community. Поправить, reload.
 
 ```bash
 # 1. Адрес есть в сете?
-nft get element inet pbr ru_v4 { 1.2.3.4 }   # не должно ругаться
+nft get element inet pbr ru_v4 { 198.51.100.10 }   # не должно ругаться
 
 # 2. Routing decision учитывает mark?
-ip -4 route get 1.2.3.4 mark 0x201           # должен показать таблицу 100
+ip -4 route get 198.51.100.10 mark 0x201           # должен показать таблицу 100
 
 # 3. На практике mark вообще ставится? (временный счётчик.)
-nft 'add rule inet pbr prerouting ip daddr 1.2.3.4 counter comment trace'
+nft 'add rule inet pbr prerouting ip daddr 198.51.100.10 counter comment trace'
 # ... сгенерить трафик ...
 nft list chain inet pbr prerouting | grep trace
 nft -a list chain inet pbr prerouting    # найти handle

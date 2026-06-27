@@ -40,8 +40,8 @@ endpoint). Maintain an operator-controlled list and pass it via
 cat > /etc/georoute/extras-ru-v4.list <<'EOF'
 # Operator-maintained additions to ru_v4 set
 # ddos-guard CDN (Belize ASN, not in RIPE-RU)
-186.2.160.0/22
-186.2.164.0/22
+203.0.113.0/22
+198.51.100.0/22
 EOF
 
 georoute --country=RU --extras-v4-file=/etc/georoute/extras-ru-v4.list
