@@ -61,6 +61,29 @@ firewalld (так что таблица `inet pbr` — независимая) �
 | `--nft-binary` | `/usr/sbin/nft` | `GEOROUTE_NFT_BINARY` | Override для musl/alt-инсталляций. |
 | `--refresh-interval` | `0` (oneshot) | `GEOROUTE_REFRESH_INTERVAL` | `> 0` + `--http-addr` set: daemon-режим. Пайплайн крутится на этом интервале. |
 
+### Target-rendering (экспериментально)
+
+Target-rendering позволяет использовать `georoute` как prefix-loader для
+маршрутизаторов, на которых не запущен локальный FRR. `georoute` не становится
+демоном маршрутизации: он скачивает, валидирует, агрегирует и рендерит
+префиксные или policy-объекты. Целевой маршрутизатор отвечает за route origin,
+протокольные сессии, forwarding, NAT и policy-based routing.
+
+| Флаг | По умолчанию | Эффект |
+|---|---|---|
+| `--target` | `frr` | Target-адаптер. `frr` сохраняет прежний FRR + nftables apply-path. `file` и `iosxe` сейчас поддерживают только render-режим. |
+| `--mode` | `apply` | Режим выполнения. Для target-адаптеров вне FRR используется `render`. |
+| `--target-output` | `-` | Куда писать результат. `-` пишет в stdout; другое значение атомарно записывается в файл. |
+| `--iosxe-prefix-list` | `PL-GEOROUTE-<CC>-V4` | Имя IPv4 prefix-list в IOS XE. |
+| `--iosxe-route-map` | `RM-GEOROUTE-<CC>-OUT` | Имя route-map в IOS XE, который match'ит созданный prefix-list. |
+
+Примеры:
+
+```bash
+georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.txt
+georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
+```
+
 ## Маркеры в `frr.conf`
 
 `georoute` пишет строки `network X/Y route-map MARK-RU-EXIT` между
