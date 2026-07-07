@@ -6,6 +6,19 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Experimental target rendering mode for non-FRR routers:
+  - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
+  - `--target=iosxe --mode=render` writes deterministic IOS XE `ip prefix-list`
+    and `route-map` candidate configuration.
+  - `--target-output` writes the rendered candidate to a file; `-` keeps stdout.
+  - `--iosxe-prefix-list` and `--iosxe-route-map` override derived IOS XE
+    object names.
+- Target rendering is opt-in. The default `--target=frr` path keeps the existing
+  FRR + nftables behavior.
+- SemVer impact: MINOR when released, because the feature adds a backward
+  compatible target interface.
+
 [Unreleased]: https://github.com/dantte-lp/georoute/compare/v2.1.0...HEAD
 
 ## [2.1.0] - 2026-06-27

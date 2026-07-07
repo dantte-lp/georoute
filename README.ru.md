@@ -13,6 +13,11 @@
 2. **nftables** — атомарно заменяет содержимое сетов `inet pbr ru_v4` и
    `inet pbr ru_v6` одной транзакцией `nft -f -`.
 
+Дефолтный target остаётся локальным FRR + nftables apply-path. Экспериментальный
+target-rendering может выдавать кандидаты prefix/policy-конфигурации для
+маршрутизаторов, включая IOS XE; route origin, протокольные сессии и forwarding
+остаются зоной ответственности целевого маршрутизатора.
+
 Отдельное `ip rule fwmark 0x201 lookup 100` + выделенная таблица 100
 заставляют совпавший трафик выходить через локальный uplink, а не через
 дефолтный маршрут от BGP-пира. Главная FIB остаётся компактной (никаких
@@ -88,7 +93,14 @@ georoute --dry-run
 georoute --force
 ```
 
-Полный список флагов — в [docs/CONFIGURATION.md](docs/CONFIGURATION.md);
+Render-only вывод для target-адаптеров вне FRR:
+
+```bash
+georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.txt
+georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
+```
+
+Полный список флагов — в [docs/CONFIGURATION.ru.md](docs/CONFIGURATION.ru.md);
 остальное по инфраструктуре (nftables-каркас, `ip rule`, FRR-маркеры) —
 в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

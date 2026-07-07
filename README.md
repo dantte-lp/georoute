@@ -15,6 +15,10 @@ aggregates it down to the minimal covering set of CIDRs, and atomically updates:
    batch, kernel applies atomically — see
    [nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Atomic_rule_replacement)).
 
+The default target is still the local FRR + nftables apply path. Experimental
+target rendering can emit prefix/policy candidates for routers such as IOS XE,
+but the target router owns route origin, protocol sessions, and forwarding.
+
 A separate `ip rule fwmark <X> lookup <N>` + per-country routing table makes
 matched destinations exit via the *local* uplink instead of the BGP-advertised
 default. The main routing table stays compact (no 8 000-entry static dump), and
@@ -169,6 +173,23 @@ Tunable timeouts + tool paths (added in v2.1):
 -frr-reload-script string    path to frr-reload.py        (default /usr/lib/frr/frr-reload.py)
 -nft-binary string           path to nft                   (default /usr/sbin/nft)
 -refresh-interval duration   when >0 + --http-addr set: daemon ticker (default 0 = oneshot)
+```
+
+Target rendering (experimental):
+
+```text
+-target string               target adapter: frr|file|iosxe (default frr)
+-mode string                 execution mode: apply|render   (default apply)
+-target-output string        render output path, or - for stdout (default -)
+-iosxe-prefix-list string    IOS XE prefix-list name (default PL-GEOROUTE-<CC>-V4)
+-iosxe-route-map string      IOS XE route-map name   (default RM-GEOROUTE-<CC>-OUT)
+```
+
+Non-FRR targets are render-only in this build:
+
+```bash
+georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.txt
+georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
 ```
 
 ## Safety properties

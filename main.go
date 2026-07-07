@@ -108,6 +108,11 @@ type cliFlags struct {
 	logLevel         string
 	frrReloadScript  string
 	nftBinary        string
+	target           string
+	targetMode       string
+	targetOutput     string
+	iosxePrefixList  string
+	iosxeRouteMap    string
 	cacheMaxAge      time.Duration
 	readyMaxAge      time.Duration
 	httpTimeout      time.Duration
@@ -186,6 +191,21 @@ func (f *cliFlags) applyDefaults() {
 	if f.nftBinary == "" {
 		f.nftBinary = defaultNftBinary
 	}
+	if f.target == "" {
+		f.target = defaultTarget
+	}
+	if f.targetMode == "" {
+		f.targetMode = defaultTargetMode
+	}
+	if f.targetOutput == "" {
+		f.targetOutput = targetOutputStdout
+	}
+	if f.iosxePrefixList == "" {
+		f.iosxePrefixList = fmt.Sprintf(iosxePrefixListBase, cc)
+	}
+	if f.iosxeRouteMap == "" {
+		f.iosxeRouteMap = fmt.Sprintf(iosxeRouteMapBase, cc)
+	}
 	// refreshInterval default stays 0 — oneshot semantics; daemon
 	// mode opts in via the flag.
 }
@@ -205,7 +225,7 @@ func (f *cliFlags) markers() (string, string, string, string) {
 // signals, flock, HTTP bind) and the work pipeline; the glue is
 // intentionally linear so each step is auditable in one read.
 //
-//nolint:funlen
+//nolint:funlen,maintidx
 func realMain() int {
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
@@ -239,6 +259,11 @@ func realMain() int {
 	flag.DurationVar(&flags.retryBaseDelay, "retry-base-delay", 0, "base delay for the linear retry backoff (default 2s)")
 	flag.StringVar(&flags.frrReloadScript, "frr-reload-script", "", "path to frr-reload.py (default /usr/lib/frr/frr-reload.py)")
 	flag.StringVar(&flags.nftBinary, "nft-binary", "", "path to the nft binary (default /usr/sbin/nft)")
+	flag.StringVar(&flags.target, "target", "", "prefix-loader target: frr|file|iosxe (default frr)")
+	flag.StringVar(&flags.targetMode, "mode", "", "target mode: render|apply (default apply)")
+	flag.StringVar(&flags.targetOutput, "target-output", "", "rendered target artifact path; '-' writes to stdout (default -)")
+	flag.StringVar(&flags.iosxePrefixList, "iosxe-prefix-list", "", "IOS XE prefix-list name (default PL-GEOROUTE-<CC>-V4)")
+	flag.StringVar(&flags.iosxeRouteMap, "iosxe-route-map", "", "IOS XE route-map name (default RM-GEOROUTE-<CC>-OUT)")
 	flag.DurationVar(&flags.refreshInterval, "refresh-interval", 0, "when >0 + --http-addr set, re-run the work pipeline every interval (daemon mode). 0 means oneshot semantics: run once and park on SIGTERM.")
 	flag.Parse()
 
@@ -495,6 +520,14 @@ func run(ctx context.Context, f cliFlags, logger *slog.Logger, m *metrics) error
 		m.setPrefixCount("v6", "extras", len(extrasV6))
 		m.setPrefixCount("v4", "merged", len(v4Agg))
 		m.setPrefixCount("v6", "merged", len(v6Agg))
+	}
+
+	if f.target != targetFRR {
+		return runTarget(ctx, f, logger, v4Agg)
+	}
+	targetErr := validateFRRTargetMode(f.targetMode)
+	if targetErr != nil {
+		return targetErr
 	}
 
 	v4Block := renderNetworks(v4Agg, f.routeMap)

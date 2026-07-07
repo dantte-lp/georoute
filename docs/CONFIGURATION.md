@@ -61,6 +61,28 @@ feed.
 | `--nft-binary` | `/usr/sbin/nft` | `GEOROUTE_NFT_BINARY` | Override for musl or alternate installs. |
 | `--refresh-interval` | `0` (oneshot) | `GEOROUTE_REFRESH_INTERVAL` | When `> 0` + `--http-addr` is set: enter daemon mode. The work pipeline runs on this interval; `Type=oneshot` semantics are off. |
 
+### Target rendering (experimental)
+
+Target rendering lets `georoute` act as a prefix-loader for routers that do not
+run local FRR. It does not become a routing daemon: it fetches, validates,
+aggregates, and renders prefix or policy objects. The target router still owns
+route origin, protocol sessions, forwarding, NAT, and policy-based routing.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--target` | `frr` | Target adapter. `frr` keeps the legacy FRR + nftables apply path. `file` and `iosxe` currently support render mode only. |
+| `--mode` | `apply` | Execution mode. Use `render` with non-FRR targets. |
+| `--target-output` | `-` | Render destination. `-` writes to stdout; any other value is written atomically as a file. |
+| `--iosxe-prefix-list` | `PL-GEOROUTE-<CC>-V4` | IOS XE IPv4 prefix-list object name. |
+| `--iosxe-route-map` | `RM-GEOROUTE-<CC>-OUT` | IOS XE route-map object name matching the generated prefix-list. |
+
+Examples:
+
+```bash
+georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.txt
+georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
+```
+
 ## Markers in `frr.conf`
 
 `georoute` writes `network X/Y route-map MARK-RU-EXIT` lines between markers.

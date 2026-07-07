@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### Добавлено
+- Экспериментальный режим target-rendering для маршрутизаторов вне FRR:
+  - `--target=file --mode=render` пишет по одному агрегированному IPv4
+    префиксу на строку.
+  - `--target=iosxe --mode=render` пишет детерминированный кандидат IOS XE:
+    `ip prefix-list` и `route-map`.
+  - `--target-output` пишет кандидат в файл; `-` оставляет stdout.
+  - `--iosxe-prefix-list` и `--iosxe-route-map` переопределяют производные
+    имена объектов IOS XE.
+- Target-rendering включается явно. Дефолтный `--target=frr` сохраняет прежнее
+  поведение FRR + nftables.
+- SemVer-влияние: MINOR при релизе, потому что добавлен обратно совместимый
+  target-интерфейс.
+
 [Unreleased]: https://github.com/dantte-lp/georoute/compare/v2.1.0...HEAD
 
 ## [2.1.0] - 2026-06-27
