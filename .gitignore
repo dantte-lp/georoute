@@ -34,3 +34,7 @@ Thumbs.db
 .env
 .env.local
 *.local
+
+# Runtime/generated controller output
+.cache/
+artifacts/

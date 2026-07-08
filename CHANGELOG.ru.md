@@ -15,10 +15,32 @@
   - `--target-output` пишет кандидат в файл; `-` оставляет stdout.
   - `--iosxe-prefix-list` и `--iosxe-route-map` переопределяют производные
     имена объектов IOS XE.
+  - `--iosxe-route-map-seq` и `--iosxe-route-map-deny-seq` управляют sequence
+    в IOS XE route-map, чтобы добавлять feed-префиксы в существующий route-map
+    без замены текущей permit sequence.
+  - `--iosxe-replace-prefix-list` рендерит идемпотентный кандидат замены IOS XE
+    prefix-list для контролируемой загрузки в C8000V.
+  - `--iosxe-static-next-hop`, `--iosxe-static-route-map`,
+    `--iosxe-static-route-name`, `--iosxe-static-tag` и `--iosxe-bgp-as`
+    рендерят опциональный IOS XE static-route origin и кандидат
+    `redistribute static`.
+  - `--iosxe-apply-max-prefixes` добавляет safety guard для будущего IOS XE
+    apply-mode; полный feed должен повышать лимит явно только после реализации
+    diff/postcheck.
+- Podman development flow:
+  - `Containerfile.dev` собирает Go 1.26 dev-image с закреплённым
+    `golangci-lint`.
+  - `.containerignore` уменьшает build context.
+  - `compose.dev.yaml` и `make podman-*` дают воспроизводимые test/CI-запуски
+    с именованными Go cache volumes.
 - Target-rendering включается явно. Дефолтный `--target=frr` сохраняет прежнее
   поведение FRR + nftables.
 - SemVer-влияние: MINOR при релизе, потому что добавлен обратно совместимый
   target-интерфейс.
+
+### Изменено
+- IOS XE renderer теперь добавляет явный deny-tail в prefix-list и route-map,
+  чтобы намерение policy было видно в конфигурации маршрутизатора.
 
 [Unreleased]: https://github.com/dantte-lp/georoute/compare/v2.1.0...HEAD
 

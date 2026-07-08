@@ -124,6 +124,32 @@ Force a write/reload even when hashes match (post-recovery):
 georoute --country=RU --force
 ```
 
+Render-only output for non-FRR targets:
+
+```bash
+georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.txt
+georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --target-output=iosxe-ru.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --target-output=iosxe-ru-c8000v.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --iosxe-static-next-hop=94.139.250.25 --iosxe-bgp-as=4200099722 --target-output=iosxe-ru-c8000v-static-origin.cfg
+```
+
+For C8000V loads, use `--iosxe-replace-prefix-list` when the generated
+candidate is the authoritative state. It removes stale IOS XE prefix-list
+entries before re-creating the current feed object. Use
+`--iosxe-route-map-seq` to add the generated prefix-list to an existing
+route-map without replacing its current sequence. Use
+`--iosxe-static-next-hop` plus `--iosxe-bgp-as` when the router must originate
+the feed with generated static routes and `redistribute static route-map`.
+
+Containerized development:
+
+```bash
+make podman-build
+make podman-test
+make podman-ci
+```
+
 ## CLI flags
 
 Country + naming (since v1):

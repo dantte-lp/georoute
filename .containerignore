@@ -1,0 +1,12 @@
+.git
+.worktrees
+georoute
+coverage.out
+coverage.html
+*.prof
+*.test
+tmp/
+.cache/
+.go-build/
+.go-mod/
+dist/

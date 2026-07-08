@@ -91,40 +91,49 @@ func main() {
 type cliFlags struct {
 	// strings first (16 B each on 64-bit) for field-alignment, durations
 	// next, ints, bools last.
-	frrConf          string
-	lockFile         string
-	country          string
-	routeMap         string
-	nftSetV4         string
-	nftSetV6         string
-	markerPrefix     string
-	feedURL          string
-	extrasV4File     string
-	extrasV6File     string
-	cacheFile        string
-	httpAddr         string
-	lastSuccessFile  string
-	logFormat        string
-	logLevel         string
-	frrReloadScript  string
-	nftBinary        string
-	target           string
-	targetMode       string
-	targetOutput     string
-	iosxePrefixList  string
-	iosxeRouteMap    string
-	cacheMaxAge      time.Duration
-	readyMaxAge      time.Duration
-	httpTimeout      time.Duration
-	frrReloadTimeout time.Duration
-	nftTimeout       time.Duration
-	retryBaseDelay   time.Duration
-	refreshInterval  time.Duration
-	retryAttempts    int
-	reloadOK         bool
-	dryRun           bool
-	force            bool
-	updateNft        bool
+	frrConf                string
+	lockFile               string
+	country                string
+	routeMap               string
+	nftSetV4               string
+	nftSetV6               string
+	markerPrefix           string
+	feedURL                string
+	extrasV4File           string
+	extrasV6File           string
+	cacheFile              string
+	httpAddr               string
+	lastSuccessFile        string
+	logFormat              string
+	logLevel               string
+	frrReloadScript        string
+	nftBinary              string
+	target                 string
+	targetMode             string
+	targetOutput           string
+	iosxePrefixList        string
+	iosxeRouteMap          string
+	iosxeStaticNextHop     string
+	iosxeStaticRouteMap    string
+	iosxeStaticRouteName   string
+	iosxeBGPAS             string
+	cacheMaxAge            time.Duration
+	readyMaxAge            time.Duration
+	httpTimeout            time.Duration
+	frrReloadTimeout       time.Duration
+	nftTimeout             time.Duration
+	retryBaseDelay         time.Duration
+	refreshInterval        time.Duration
+	retryAttempts          int
+	iosxeRouteMapSeq       int
+	iosxeRouteMapDenySeq   int
+	iosxeStaticTag         int
+	iosxeApplyMaxPrefixes  int
+	reloadOK               bool
+	dryRun                 bool
+	force                  bool
+	updateNft              bool
+	iosxeReplacePrefixList bool
 }
 
 // applyDefaults fills the country-dependent fields from `country` when the
@@ -134,6 +143,15 @@ type cliFlags struct {
 func (f *cliFlags) applyDefaults() {
 	cc := strings.ToUpper(f.country)
 	ccLower := strings.ToLower(f.country)
+	f.applyBaseDefaults(cc, ccLower)
+	f.applyRuntimeDefaults(ccLower)
+	f.applyIOSXETargetDefaults(cc)
+	f.applyIOSXEDefaults(cc)
+	// refreshInterval default stays 0 — oneshot semantics; daemon
+	// mode opts in via the flag.
+}
+
+func (f *cliFlags) applyBaseDefaults(cc, ccLower string) {
 	if f.routeMap == "" {
 		f.routeMap = "MARK-" + cc + "-EXIT"
 	}
@@ -155,6 +173,9 @@ func (f *cliFlags) applyDefaults() {
 	if f.cacheFile == "" {
 		f.cacheFile = "/var/lib/georoute/feed-" + ccLower + ".json.gz"
 	}
+}
+
+func (f *cliFlags) applyRuntimeDefaults(ccLower string) {
 	if f.cacheMaxAge == 0 {
 		f.cacheMaxAge = 7 * 24 * time.Hour
 	}
@@ -200,14 +221,33 @@ func (f *cliFlags) applyDefaults() {
 	if f.targetOutput == "" {
 		f.targetOutput = targetOutputStdout
 	}
+}
+
+func (f *cliFlags) applyIOSXETargetDefaults(cc string) {
 	if f.iosxePrefixList == "" {
 		f.iosxePrefixList = fmt.Sprintf(iosxePrefixListBase, cc)
 	}
+	if f.target != targetIOSXE {
+		return
+	}
+	if f.iosxeStaticRouteMap == "" {
+		f.iosxeStaticRouteMap = fmt.Sprintf(iosxeStaticRouteMapBase, cc)
+	}
+	if f.iosxeStaticRouteName == "" {
+		f.iosxeStaticRouteName = fmt.Sprintf(iosxeStaticRouteNameBase, cc)
+	}
+}
+
+func (f *cliFlags) applyIOSXEDefaults(cc string) {
 	if f.iosxeRouteMap == "" {
 		f.iosxeRouteMap = fmt.Sprintf(iosxeRouteMapBase, cc)
 	}
-	// refreshInterval default stays 0 — oneshot semantics; daemon
-	// mode opts in via the flag.
+	if f.iosxeRouteMapSeq == 0 {
+		f.iosxeRouteMapSeq = defaultRouteMapSeq
+	}
+	if f.iosxeRouteMapDenySeq == 0 {
+		f.iosxeRouteMapDenySeq = defaultDenySeq
+	}
 }
 
 // markers returns the four marker comment lines used to delimit per-country
@@ -264,6 +304,15 @@ func realMain() int {
 	flag.StringVar(&flags.targetOutput, "target-output", "", "rendered target artifact path; '-' writes to stdout (default -)")
 	flag.StringVar(&flags.iosxePrefixList, "iosxe-prefix-list", "", "IOS XE prefix-list name (default PL-GEOROUTE-<CC>-V4)")
 	flag.StringVar(&flags.iosxeRouteMap, "iosxe-route-map", "", "IOS XE route-map name (default RM-GEOROUTE-<CC>-OUT)")
+	flag.StringVar(&flags.iosxeStaticNextHop, "iosxe-static-next-hop", "", "IOS XE static route next-hop used to originate the generated prefixes; empty disables static-route rendering")
+	flag.StringVar(&flags.iosxeStaticRouteMap, "iosxe-static-route-map", "", "IOS XE route-map name for redistribute static (default RM-GEOROUTE-<CC>-STATIC)")
+	flag.StringVar(&flags.iosxeStaticRouteName, "iosxe-static-route-name", "", "IOS XE static route name for generated routes (default GEOROUTE_<CC>)")
+	flag.StringVar(&flags.iosxeBGPAS, "iosxe-bgp-as", "", "IOS XE BGP AS used to render redistribute static route-map; empty disables BGP stanza")
+	flag.IntVar(&flags.iosxeRouteMapSeq, "iosxe-route-map-seq", 0, "IOS XE route-map permit sequence for rendered prefix-list match (default 10)")
+	flag.IntVar(&flags.iosxeRouteMapDenySeq, "iosxe-route-map-deny-seq", 0, "IOS XE route-map explicit deny sequence (default 9999)")
+	flag.IntVar(&flags.iosxeStaticTag, "iosxe-static-tag", 0, "optional IOS XE static route tag for generated routes")
+	flag.IntVar(&flags.iosxeApplyMaxPrefixes, "iosxe-apply-max-prefixes", 100, "maximum IPv4 prefixes allowed in IOS XE apply mode; set higher explicitly for production feed")
+	flag.BoolVar(&flags.iosxeReplacePrefixList, "iosxe-replace-prefix-list", false, "render 'no ip prefix-list <name>' before IOS XE prefix-list entries for idempotent replace")
 	flag.DurationVar(&flags.refreshInterval, "refresh-interval", 0, "when >0 + --http-addr set, re-run the work pipeline every interval (daemon mode). 0 means oneshot semantics: run once and park on SIGTERM.")
 	flag.Parse()
 

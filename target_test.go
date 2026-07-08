@@ -8,6 +8,14 @@ import (
 	"testing"
 )
 
+const (
+	iosxeRUPrefixListTest      = "PL-GEOROUTE-RU-V4"
+	iosxeRUDefaultRouteMapTest = "RM-GEOROUTE-RU-OUT"
+	iosxeRUOutRouteMapTest     = "RM-RU-GEOROUTE-OUT"
+	iosxeRUStaticRouteMapTest  = "RM-GEOROUTE-RU-STATIC"
+	iosxeRUStaticRouteNameTest = "GEOROUTE_RU"
+)
+
 func mustPrefix(t *testing.T, s string) netip.Prefix {
 	t.Helper()
 	p, err := netip.ParsePrefix(s)
@@ -24,21 +32,108 @@ func TestRenderIOSXEPrefixList(t *testing.T) {
 		mustPrefix(t, "203.0.113.0/24"),
 		mustPrefix(t, "198.51.100.0/24"),
 	}
-	got := renderIOSXEPrefixList("PL-GEOROUTE-RU-V4", prefixes, 10)
-	want := "ip prefix-list PL-GEOROUTE-RU-V4 seq 10 permit 203.0.113.0/24\n" +
-		"ip prefix-list PL-GEOROUTE-RU-V4 seq 20 permit 198.51.100.0/24"
+	got := renderIOSXEPrefixList(iosxeRUPrefixListTest, prefixes, 10)
+	want := "ip prefix-list " + iosxeRUPrefixListTest + " seq 10 permit 203.0.113.0/24\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 20 permit 198.51.100.0/24\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 999999 deny 0.0.0.0/0 le 32"
 	if got != want {
 		t.Fatalf("renderIOSXEPrefixList() = %q, want %q", got, want)
+	}
+}
+
+func TestRenderIOSXEReplaceCandidate(t *testing.T) {
+	t.Parallel()
+	prefixes := []netip.Prefix{mustPrefix(t, "203.0.113.0/24")}
+	got := renderIOSXECandidate(cliFlags{
+		iosxePrefixList:        iosxeRUPrefixListTest,
+		iosxeRouteMap:          iosxeRUDefaultRouteMapTest,
+		iosxeReplacePrefixList: true,
+		iosxeRouteMapSeq:       10,
+		iosxeRouteMapDenySeq:   9999,
+	}, prefixes)
+	want := "no ip prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 10 permit 203.0.113.0/24\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 999999 deny 0.0.0.0/0 le 32\n" +
+		"route-map " + iosxeRUDefaultRouteMapTest + " permit 10\n" +
+		" match ip address prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"route-map " + iosxeRUDefaultRouteMapTest + " deny 9999"
+	if got != want {
+		t.Fatalf("renderIOSXECandidate() = %q, want %q", got, want)
 	}
 }
 
 func TestRenderIOSXECandidate(t *testing.T) {
 	t.Parallel()
 	prefixes := []netip.Prefix{mustPrefix(t, "203.0.113.0/24")}
-	got := renderIOSXECandidate("PL-GEOROUTE-RU-V4", "RM-GEOROUTE-RU-OUT", prefixes)
-	want := "ip prefix-list PL-GEOROUTE-RU-V4 seq 10 permit 203.0.113.0/24\n" +
-		"route-map RM-GEOROUTE-RU-OUT permit 10\n" +
-		" match ip address prefix-list PL-GEOROUTE-RU-V4"
+	got := renderIOSXECandidate(cliFlags{
+		iosxePrefixList:      iosxeRUPrefixListTest,
+		iosxeRouteMap:        iosxeRUDefaultRouteMapTest,
+		iosxeRouteMapSeq:     10,
+		iosxeRouteMapDenySeq: 9999,
+	}, prefixes)
+	want := "ip prefix-list " + iosxeRUPrefixListTest + " seq 10 permit 203.0.113.0/24\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 999999 deny 0.0.0.0/0 le 32\n" +
+		"route-map " + iosxeRUDefaultRouteMapTest + " permit 10\n" +
+		" match ip address prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"route-map " + iosxeRUDefaultRouteMapTest + " deny 9999"
+	if got != want {
+		t.Fatalf("renderIOSXECandidate() = %q, want %q", got, want)
+	}
+}
+
+func TestRenderIOSXECandidateWithRouteMapSequence(t *testing.T) {
+	t.Parallel()
+	prefixes := []netip.Prefix{mustPrefix(t, "203.0.113.0/24")}
+	got := renderIOSXECandidate(cliFlags{
+		iosxePrefixList:        iosxeRUPrefixListTest,
+		iosxeRouteMap:          iosxeRUOutRouteMapTest,
+		iosxeReplacePrefixList: true,
+		iosxeRouteMapSeq:       20,
+		iosxeRouteMapDenySeq:   9999,
+	}, prefixes)
+	want := "no ip prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 10 permit 203.0.113.0/24\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 999999 deny 0.0.0.0/0 le 32\n" +
+		"route-map RM-RU-GEOROUTE-OUT permit 20\n" +
+		" match ip address prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"route-map RM-RU-GEOROUTE-OUT deny 9999"
+	if got != want {
+		t.Fatalf("renderIOSXECandidate() = %q, want %q", got, want)
+	}
+}
+
+func TestRenderIOSXECandidateWithStaticOrigin(t *testing.T) {
+	t.Parallel()
+	prefixes := []netip.Prefix{
+		mustPrefix(t, "203.0.113.0/24"),
+		mustPrefix(t, "198.51.100.0/25"),
+	}
+	got := renderIOSXECandidate(cliFlags{
+		iosxePrefixList:      iosxeRUPrefixListTest,
+		iosxeRouteMap:        iosxeRUOutRouteMapTest,
+		iosxeStaticNextHop:   "192.0.2.1",
+		iosxeStaticRouteMap:  iosxeRUStaticRouteMapTest,
+		iosxeStaticRouteName: iosxeRUStaticRouteNameTest,
+		iosxeBGPAS:           "4200099722",
+		iosxeRouteMapSeq:     20,
+		iosxeRouteMapDenySeq: 9999,
+		iosxeStaticTag:       65001,
+	}, prefixes)
+	want := "ip prefix-list " + iosxeRUPrefixListTest + " seq 10 permit 203.0.113.0/24\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 20 permit 198.51.100.0/25\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 999999 deny 0.0.0.0/0 le 32\n" +
+		"ip route 203.0.113.0 255.255.255.0 192.0.2.1 tag 65001 name " + iosxeRUStaticRouteNameTest + "\n" +
+		"ip route 198.51.100.0 255.255.255.128 192.0.2.1 tag 65001 name " + iosxeRUStaticRouteNameTest + "\n" +
+		"route-map " + iosxeRUStaticRouteMapTest + " permit 10\n" +
+		" match ip address prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"route-map " + iosxeRUStaticRouteMapTest + " deny 9999\n" +
+		"route-map RM-RU-GEOROUTE-OUT permit 20\n" +
+		" match ip address prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"route-map RM-RU-GEOROUTE-OUT deny 9999\n" +
+		"router bgp 4200099722\n" +
+		" address-family ipv4\n" +
+		"  redistribute static route-map " + iosxeRUStaticRouteMapTest + "\n" +
+		" exit-address-family"
 	if got != want {
 		t.Fatalf("renderIOSXECandidate() = %q, want %q", got, want)
 	}
@@ -60,11 +155,16 @@ func TestRenderPrefixLines(t *testing.T) {
 func TestRunTargetRejectsApplyMode(t *testing.T) {
 	t.Parallel()
 	flags := cliFlags{
-		target:          targetIOSXE,
-		targetMode:      targetModeApply,
-		targetOutput:    targetOutputStdout,
-		iosxePrefixList: "PL-GEOROUTE-RU-V4",
-		iosxeRouteMap:   "RM-GEOROUTE-RU-OUT",
+		target:                targetIOSXE,
+		targetMode:            targetModeApply,
+		targetOutput:          targetOutputStdout,
+		iosxePrefixList:       iosxeRUPrefixListTest,
+		iosxeRouteMap:         iosxeRUDefaultRouteMapTest,
+		iosxeApplyMaxPrefixes: 10,
+		iosxeRouteMapSeq:      defaultRouteMapSeq,
+		iosxeRouteMapDenySeq:  defaultDenySeq,
+		iosxeStaticRouteMap:   iosxeRUStaticRouteMapTest,
+		iosxeStaticRouteName:  iosxeRUStaticRouteNameTest,
 	}
 	logger := slog.New(slog.DiscardHandler)
 	err := runTarget(context.Background(), flags, logger, []netip.Prefix{
@@ -73,8 +173,31 @@ func TestRunTargetRejectsApplyMode(t *testing.T) {
 	if err == nil {
 		t.Fatal("runTarget() error = nil, want apply-mode error")
 	}
-	if !strings.Contains(err.Error(), `only supports "render"`) {
-		t.Fatalf("runTarget() error = %q, want render-mode guard", err)
+	if !strings.Contains(err.Error(), "apply transport is not implemented yet") {
+		t.Fatalf("runTarget() error = %q, want apply transport guard", err)
+	}
+}
+
+func TestRunTargetApplyModePrefixLimit(t *testing.T) {
+	t.Parallel()
+	flags := cliFlags{
+		target:                targetIOSXE,
+		targetMode:            targetModeApply,
+		targetOutput:          targetOutputStdout,
+		iosxePrefixList:       iosxeRUPrefixListTest,
+		iosxeRouteMap:         iosxeRUDefaultRouteMapTest,
+		iosxeApplyMaxPrefixes: 1,
+	}
+	logger := slog.New(slog.DiscardHandler)
+	err := runTarget(context.Background(), flags, logger, []netip.Prefix{
+		mustPrefix(t, "203.0.113.0/24"),
+		mustPrefix(t, "198.51.100.0/24"),
+	})
+	if err == nil {
+		t.Fatal("runTarget() error = nil, want apply prefix limit error")
+	}
+	if !strings.Contains(err.Error(), "iosxe apply prefix limit exceeded") {
+		t.Fatalf("runTarget() error = %q, want prefix limit guard", err)
 	}
 }
 
