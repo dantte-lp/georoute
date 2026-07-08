@@ -10,6 +10,7 @@ func TestBuildIOSXEApplyScript(t *testing.T) {
 	flags := cliFlags{
 		iosxePrefixList:      iosxeRUPrefixListTest,
 		iosxeRouteMap:        iosxeRUOutRouteMapTest,
+		iosxeVRFLeakRouteMap: iosxeGlobalToTransitTest,
 		iosxeStaticRouteMap:  iosxeRUStaticRouteMapTest,
 		iosxeStaticRouteName: iosxeRUStaticRouteNameTest,
 		iosxeBGPAS:           "4200099722",
@@ -24,6 +25,7 @@ func TestBuildIOSXEApplyScript(t *testing.T) {
 		"ip route 203.0.113.0 255.255.255.0 192.0.2.1 name " + iosxeRUStaticRouteNameTest,
 		"\nend\nshow ip prefix-list " + iosxeRUPrefixListTest,
 		"\nshow route-map " + iosxeRUOutRouteMapTest,
+		"\nshow route-map " + iosxeGlobalToTransitTest,
 		"\nshow route-map " + iosxeRUStaticRouteMapTest,
 		"\nshow running-config | section ^router bgp\nexit\n",
 	}
@@ -37,13 +39,15 @@ func TestBuildIOSXEApplyScript(t *testing.T) {
 func TestVerifyIOSXEApplyOutput(t *testing.T) {
 	t.Parallel()
 	flags := cliFlags{
-		iosxePrefixList:     iosxeRUPrefixListTest,
-		iosxeRouteMap:       iosxeRUOutRouteMapTest,
-		iosxeStaticRouteMap: iosxeRUStaticRouteMapTest,
-		iosxeBGPAS:          "4200099722",
+		iosxePrefixList:      iosxeRUPrefixListTest,
+		iosxeRouteMap:        iosxeRUOutRouteMapTest,
+		iosxeVRFLeakRouteMap: iosxeGlobalToTransitTest,
+		iosxeStaticRouteMap:  iosxeRUStaticRouteMapTest,
+		iosxeBGPAS:           "4200099722",
 	}
 	out := "show ip prefix-list " + iosxeRUPrefixListTest + "\n" +
 		"show route-map " + iosxeRUOutRouteMapTest + "\n" +
+		"show route-map " + iosxeGlobalToTransitTest + "\n" +
 		"show route-map " + iosxeRUStaticRouteMapTest + "\n" +
 		"redistribute static route-map " + iosxeRUStaticRouteMapTest
 	err := verifyIOSXEApplyOutput(flags, out)

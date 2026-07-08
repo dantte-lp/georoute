@@ -30,6 +30,9 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
     `--iosxe-ssh-key-file`, `--iosxe-known-hosts-file`, `--iosxe-ssh-timeout`,
     and `--iosxe-save-config` add a public-key SSH apply path for bounded IOS XE
     candidate loads with host-key verification and show-based postchecks.
+  - `--iosxe-vrf-leak-route-map` and `--iosxe-vrf-leak-route-map-seq` render an
+    optional permit sequence for leaking generated global BGP prefixes into a
+    service VRF without replacing existing route-map sequences.
 - Podman development flow:
   - `Containerfile.dev` builds a Go 1.26 development image with pinned
     `golangci-lint`.

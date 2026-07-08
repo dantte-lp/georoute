@@ -31,6 +31,9 @@
     `--iosxe-ssh-key-file`, `--iosxe-known-hosts-file`, `--iosxe-ssh-timeout` и
     `--iosxe-save-config` добавляют public-key SSH apply-path для bounded
     загрузки IOS XE candidate с проверкой host key и show-based postcheck.
+  - `--iosxe-vrf-leak-route-map` и `--iosxe-vrf-leak-route-map-seq` рендерят
+    опциональную permit sequence для leak сгенерированных global BGP prefixes в
+    service VRF без замены существующих route-map sequences.
 - Podman development flow:
   - `Containerfile.dev` собирает Go 1.26 dev-image с закреплённым
     `golangci-lint`.
