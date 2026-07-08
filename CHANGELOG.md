@@ -14,10 +14,32 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   - `--target-output` writes the rendered candidate to a file; `-` keeps stdout.
   - `--iosxe-prefix-list` and `--iosxe-route-map` override derived IOS XE
     object names.
+  - `--iosxe-route-map-seq` and `--iosxe-route-map-deny-seq` control generated
+    IOS XE route-map sequences, allowing feed prefixes to be added to an
+    existing route-map without replacing its current permit sequence.
+  - `--iosxe-replace-prefix-list` renders an idempotent IOS XE prefix-list
+    replacement candidate for C8000V-style controlled loads.
+  - `--iosxe-static-next-hop`, `--iosxe-static-route-map`,
+    `--iosxe-static-route-name`, `--iosxe-static-tag`, and `--iosxe-bgp-as`
+    render optional IOS XE static-route origin and `redistribute static`
+    candidate configuration.
+  - `--iosxe-apply-max-prefixes` adds a safety guard for future IOS XE apply
+    mode; full feeds must raise the limit explicitly after diff/postcheck
+    support exists.
+- Podman development flow:
+  - `Containerfile.dev` builds a Go 1.26 development image with pinned
+    `golangci-lint`.
+  - `.containerignore` keeps build context small.
+  - `compose.dev.yaml` and `make podman-*` targets provide reproducible
+    test and CI runs with named Go caches.
 - Target rendering is opt-in. The default `--target=frr` path keeps the existing
   FRR + nftables behavior.
 - SemVer impact: MINOR when released, because the feature adds a backward
   compatible target interface.
+
+### Changed
+- IOS XE rendering now adds explicit prefix-list and route-map deny tails, making
+  generated policy intent visible in router configuration.
 
 [Unreleased]: https://github.com/dantte-lp/georoute/compare/v2.1.0...HEAD
 

@@ -76,13 +76,37 @@ Target-rendering позволяет использовать `georoute` как p
 | `--target-output` | `-` | Куда писать результат. `-` пишет в stdout; другое значение атомарно записывается в файл. |
 | `--iosxe-prefix-list` | `PL-GEOROUTE-<CC>-V4` | Имя IPv4 prefix-list в IOS XE. |
 | `--iosxe-route-map` | `RM-GEOROUTE-<CC>-OUT` | Имя route-map в IOS XE, который match'ит созданный prefix-list. |
+| `--iosxe-route-map-seq` | `10` | Permit sequence в IOS XE route-map для match созданного prefix-list. Используйте свободную sequence при добавлении georoute в существующий route-map. |
+| `--iosxe-route-map-deny-seq` | `9999` | Sequence явного deny в IOS XE route-map. |
+| `--iosxe-replace-prefix-list` | `false` | Рендерит `no ip prefix-list <name>` перед строками IOS XE prefix-list. Используется, когда кандидат применяется как авторитетное состояние объекта и нужно удалить устаревшие entries. |
+| `--iosxe-static-next-hop` | `""` | Next-hop для IOS XE static routes. Пустое значение отключает рендеринг static routes. |
+| `--iosxe-static-route-map` | `RM-GEOROUTE-<CC>-STATIC` | IOS XE route-map для `redistribute static`. Default выставляется только при `--target=iosxe`. |
+| `--iosxe-static-route-name` | `GEOROUTE_<CC>` | Имя IOS XE static route для сгенерированных маршрутов. Default выставляется только при `--target=iosxe`. |
+| `--iosxe-static-tag` | `0` | Опциональный tag для IOS XE static route. `0` не рендерит tag. |
+| `--iosxe-bgp-as` | `""` | IOS XE BGP AS для stanza `router bgp <asn> address-family ipv4 redistribute static route-map <name>`. Пусто отключает BGP stanza. |
+| `--iosxe-apply-max-prefixes` | `100` | Safety-limit для будущего IOS XE apply-mode. Для полного feed лимит должен повышаться явно после реализации diff/postcheck. |
 
 Примеры:
 
 ```bash
 georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.txt
 georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --target-output=iosxe-ru.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --target-output=iosxe-ru-c8000v.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --iosxe-static-next-hop=94.139.250.25 --iosxe-bgp-as=4200099722 --target-output=iosxe-ru-c8000v-static-origin.cfg
 ```
+
+IOS XE renderer добавляет явный tail `deny 0.0.0.0/0 le 32` в prefix-list и
+явный `route-map ... deny 9999`. Без `--iosxe-replace-prefix-list` IOS XE
+оставляет старые sequence entries, если следующий feed стал меньше. Для C8000V
+включайте replace-mode и применяйте кандидат в контролируемой config-транзакции.
+
+Static-origin rendering является опциональным. Если задан
+`--iosxe-static-next-hop`, кандидат содержит по одной строке
+`ip route <prefix> <mask> <next-hop>` на каждый агрегированный IPv4 prefix. Если
+также задан `--iosxe-bgp-as`, кандидат содержит отдельный static route-map и
+stanza `redistribute static route-map`. Используйте этот режим только когда
+целевой маршрутизатор должен создавать route origin для feed.
 
 ## Маркеры в `frr.conf`
 

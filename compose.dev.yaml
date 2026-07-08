@@ -1,0 +1,21 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Containerfile.dev
+    image: localhost/georoute-dev:go1.26
+    working_dir: /workspace
+    environment:
+      CGO_ENABLED: "0"
+      GOCACHE: /cache/go-build
+      GOMODCACHE: /cache/go-mod
+      GOTOOLCHAIN: local
+    volumes:
+      - .:/workspace:Z
+      - go-build-cache:/cache/go-build:Z
+      - go-mod-cache:/cache/go-mod:Z
+    command: ["make", "test"]
+
+volumes:
+  go-build-cache: {}
+  go-mod-cache: {}

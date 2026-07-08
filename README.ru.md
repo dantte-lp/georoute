@@ -98,6 +98,25 @@ Render-only вывод для target-адаптеров вне FRR:
 ```bash
 georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.txt
 georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --target-output=iosxe-ru.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --target-output=iosxe-ru-c8000v.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --iosxe-static-next-hop=94.139.250.25 --iosxe-bgp-as=4200099722 --target-output=iosxe-ru-c8000v-static-origin.cfg
+```
+
+Для C8000V используйте `--iosxe-replace-prefix-list`, если сгенерированный
+кандидат является авторитетным состоянием объекта. Режим удаляет устаревшие
+IOS XE prefix-list entries перед созданием актуального списка из feed.
+`--iosxe-route-map-seq` позволяет добавить созданный prefix-list в существующий
+route-map без замены текущей sequence. Для origin маршрутов на C8000V
+используйте `--iosxe-static-next-hop` и `--iosxe-bgp-as`: renderer создаёт
+static routes и stanza `redistribute static route-map`.
+
+Контейнерная разработка через Podman:
+
+```bash
+make podman-build
+make podman-test
+make podman-ci
 ```
 
 Полный список флагов — в [docs/CONFIGURATION.ru.md](docs/CONFIGURATION.ru.md);

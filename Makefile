@@ -7,10 +7,15 @@ LDFLAGS      := -s -w -X main.version=$(VERSION)
 GOFLAGS      := -trimpath -ldflags '$(LDFLAGS)'
 INSTALL_BIN  := /usr/local/bin/$(BIN)
 SYSTEMD_DIR  := /etc/systemd/system
+PODMAN       ?= podman
+COMPOSE_FILE ?= compose.dev.yaml
+DEV_IMAGE    ?= localhost/georoute-dev:go1.26
+CONTAINERS_CONF ?= $(CURDIR)/containers.dev.conf
 
 .PHONY: help build install install-systemd uninstall \
         fmt lint vet test test-race coverage \
-        clean ci
+        clean ci \
+        podman-build podman-test podman-ci podman-shell
 
 help: ## show this help
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z_-]+:.*##/ {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -59,3 +64,42 @@ clean: ## remove build artifacts
 	rm -f $(BIN) coverage.out coverage.html *.prof
 
 ci: fmt vet lint test ## the exact chain CI runs
+
+podman-build: ## build reproducible Podman development image
+	CONTAINERS_CONF=$(CONTAINERS_CONF) $(PODMAN) build -f Containerfile.dev -t $(DEV_IMAGE) .
+
+podman-test: podman-build ## run unit tests inside the Podman development image
+	CONTAINERS_CONF=$(CONTAINERS_CONF) $(PODMAN) run --rm \
+		-v $(CURDIR):/workspace:Z \
+		-v georoute-go-build-cache:/cache/go-build:Z \
+		-v georoute-go-mod-cache:/cache/go-mod:Z \
+		-w /workspace \
+		-e CGO_ENABLED=0 \
+		-e GOCACHE=/cache/go-build \
+		-e GOMODCACHE=/cache/go-mod \
+		-e GOTOOLCHAIN=local \
+		$(DEV_IMAGE) make test
+
+podman-ci: podman-build ## run fmt, vet, lint and tests inside the Podman development image
+	CONTAINERS_CONF=$(CONTAINERS_CONF) $(PODMAN) run --rm \
+		-v $(CURDIR):/workspace:Z \
+		-v georoute-go-build-cache:/cache/go-build:Z \
+		-v georoute-go-mod-cache:/cache/go-mod:Z \
+		-w /workspace \
+		-e CGO_ENABLED=0 \
+		-e GOCACHE=/cache/go-build \
+		-e GOMODCACHE=/cache/go-mod \
+		-e GOTOOLCHAIN=local \
+		$(DEV_IMAGE) make ci
+
+podman-shell: podman-build ## open an interactive shell in the Podman development image
+	CONTAINERS_CONF=$(CONTAINERS_CONF) $(PODMAN) run --rm -it \
+		-v $(CURDIR):/workspace:Z \
+		-v georoute-go-build-cache:/cache/go-build:Z \
+		-v georoute-go-mod-cache:/cache/go-mod:Z \
+		-w /workspace \
+		-e CGO_ENABLED=0 \
+		-e GOCACHE=/cache/go-build \
+		-e GOMODCACHE=/cache/go-mod \
+		-e GOTOOLCHAIN=local \
+		$(DEV_IMAGE) bash
