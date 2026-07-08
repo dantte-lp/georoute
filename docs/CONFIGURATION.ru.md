@@ -85,6 +85,13 @@ Target-rendering позволяет использовать `georoute` как p
 | `--iosxe-static-tag` | `0` | Опциональный tag для IOS XE static route. `0` не рендерит tag. |
 | `--iosxe-bgp-as` | `""` | IOS XE BGP AS для stanza `router bgp <asn> address-family ipv4 redistribute static route-map <name>`. Пусто отключает BGP stanza. |
 | `--iosxe-apply-max-prefixes` | `100` | Safety-limit для будущего IOS XE apply-mode. Для полного feed лимит должен повышаться явно после реализации diff/postcheck. |
+| `--iosxe-ssh-host` | `""` | IOS XE SSH host для apply-mode. Обязателен для `--target=iosxe --mode=apply`. |
+| `--iosxe-ssh-port` | `22` | IOS XE SSH port для apply-mode. |
+| `--iosxe-ssh-user` | `""` | IOS XE SSH username для apply-mode. Обязателен. |
+| `--iosxe-ssh-key-file` | `""` | IOS XE SSH private key file для apply-mode. Обязателен. |
+| `--iosxe-known-hosts-file` | `""` | Файл `known_hosts` для проверки host key IOS XE. Обязателен; insecure host-key ignore не поддерживается. |
+| `--iosxe-ssh-timeout` | `30s` | SSH dial/session timeout для IOS XE apply-mode. |
+| `--iosxe-save-config` | `false` | Выполнить `write memory` после успешного IOS XE apply postcheck. |
 
 Примеры:
 
@@ -107,6 +114,13 @@ Static-origin rendering является опциональным. Если за
 также задан `--iosxe-bgp-as`, кандидат содержит отдельный static route-map и
 stanza `redistribute static route-map`. Используйте этот режим только когда
 целевой маршрутизатор должен создавать route origin для feed.
+
+IOS XE apply-mode открывает SSH-сессию с public-key authentication, проверяет
+host key маршрутизатора через `known_hosts`, отправляет сгенерированный кандидат
+в configuration mode, затем выполняет show-based postcheck для prefix-list,
+route-map и опциональной static redistribution stanza. Default
+`--iosxe-apply-max-prefixes=100` намеренно блокирует полный production feed,
+пока оператор явно не повысит лимит.
 
 ## Маркеры в `frr.conf`
 

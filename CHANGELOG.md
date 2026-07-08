@@ -26,6 +26,10 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   - `--iosxe-apply-max-prefixes` adds a safety guard for future IOS XE apply
     mode; full feeds must raise the limit explicitly after diff/postcheck
     support exists.
+  - `--iosxe-ssh-host`, `--iosxe-ssh-port`, `--iosxe-ssh-user`,
+    `--iosxe-ssh-key-file`, `--iosxe-known-hosts-file`, `--iosxe-ssh-timeout`,
+    and `--iosxe-save-config` add a public-key SSH apply path for bounded IOS XE
+    candidate loads with host-key verification and show-based postchecks.
 - Podman development flow:
   - `Containerfile.dev` builds a Go 1.26 development image with pinned
     `golangci-lint`.

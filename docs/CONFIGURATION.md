@@ -84,6 +84,13 @@ route origin, protocol sessions, forwarding, NAT, and policy-based routing.
 | `--iosxe-static-tag` | `0` | Optional IOS XE static route tag. `0` omits the tag. |
 | `--iosxe-bgp-as` | `""` | IOS XE BGP AS used to render `router bgp <asn> address-family ipv4 redistribute static route-map <name>`. Empty disables the BGP stanza. |
 | `--iosxe-apply-max-prefixes` | `100` | Safety limit for future IOS XE apply mode. Full feeds must raise this explicitly after diff/postcheck support exists. |
+| `--iosxe-ssh-host` | `""` | IOS XE SSH host for apply mode. Required for `--target=iosxe --mode=apply`. |
+| `--iosxe-ssh-port` | `22` | IOS XE SSH port for apply mode. |
+| `--iosxe-ssh-user` | `""` | IOS XE SSH username for apply mode. Required. |
+| `--iosxe-ssh-key-file` | `""` | IOS XE SSH private key file for apply mode. Required. |
+| `--iosxe-known-hosts-file` | `""` | `known_hosts` file used for IOS XE host key verification. Required; insecure host-key ignore is not supported. |
+| `--iosxe-ssh-timeout` | `30s` | SSH dial and session timeout for IOS XE apply mode. |
+| `--iosxe-save-config` | `false` | Run `write memory` after IOS XE apply postcheck succeeds. |
 
 Examples:
 
@@ -106,6 +113,13 @@ the candidate includes one `ip route <prefix> <mask> <next-hop>` line per
 aggregated IPv4 prefix. When `--iosxe-bgp-as` is also set, the candidate
 includes a dedicated static route-map and `redistribute static route-map`
 stanza. Use this only when the target router must own route origin for the feed.
+
+IOS XE apply mode opens an SSH session with public-key authentication, verifies
+the router host key through `known_hosts`, sends the rendered candidate in
+configuration mode, then runs show-based postchecks for the generated
+prefix-list, route-map and optional static redistribution stanza. The default
+`--iosxe-apply-max-prefixes=100` intentionally blocks full production feeds
+unless the operator raises the limit explicitly.
 
 ## Markers in `frr.conf`
 
