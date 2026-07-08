@@ -91,6 +91,8 @@ route origin, protocol sessions, forwarding, NAT, and policy-based routing.
 | `--iosxe-known-hosts-file` | `""` | `known_hosts` file used for IOS XE host key verification. Required; insecure host-key ignore is not supported. |
 | `--iosxe-ssh-timeout` | `30s` | SSH dial and session timeout for IOS XE apply mode. |
 | `--iosxe-save-config` | `false` | Run `write memory` after IOS XE apply postcheck succeeds. |
+| `--iosxe-vrf-leak-route-map` | `""` | Optional IOS XE route-map that leaks generated global BGP prefixes into a service VRF, for example `RM-GLOBAL-TO-TRANSIT`. Empty disables VRF leak rendering. |
+| `--iosxe-vrf-leak-route-map-seq` | `20` | Permit sequence for `--iosxe-vrf-leak-route-map`. The renderer emits only the permit sequence and does not replace existing deny tails. |
 
 Examples:
 
@@ -120,6 +122,12 @@ configuration mode, then runs show-based postchecks for the generated
 prefix-list, route-map and optional static redistribution stanza. The default
 `--iosxe-apply-max-prefixes=100` intentionally blocks full production feeds
 unless the operator raises the limit explicitly.
+
+When a service peer lives in an IOS XE VRF, static-origin routes created in the
+global table must be leaked into that VRF before the outbound neighbor route-map
+can advertise them. Use `--iosxe-vrf-leak-route-map` to add a separate permit
+sequence matching the generated prefix-list to the existing leak route-map
+without changing its current non-georoute sequences.
 
 ## Markers in `frr.conf`
 

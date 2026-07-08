@@ -92,6 +92,8 @@ Target-rendering позволяет использовать `georoute` как p
 | `--iosxe-known-hosts-file` | `""` | Файл `known_hosts` для проверки host key IOS XE. Обязателен; insecure host-key ignore не поддерживается. |
 | `--iosxe-ssh-timeout` | `30s` | SSH dial/session timeout для IOS XE apply-mode. |
 | `--iosxe-save-config` | `false` | Выполнить `write memory` после успешного IOS XE apply postcheck. |
+| `--iosxe-vrf-leak-route-map` | `""` | Опциональный IOS XE route-map для leak сгенерированных global BGP prefixes в service VRF, например `RM-GLOBAL-TO-TRANSIT`. Пусто отключает VRF leak rendering. |
+| `--iosxe-vrf-leak-route-map-seq` | `20` | Permit sequence для `--iosxe-vrf-leak-route-map`. Renderer создаёт только permit sequence и не заменяет существующие deny tails. |
 
 Примеры:
 
@@ -121,6 +123,12 @@ host key маршрутизатора через `known_hosts`, отправля
 route-map и опциональной static redistribution stanza. Default
 `--iosxe-apply-max-prefixes=100` намеренно блокирует полный production feed,
 пока оператор явно не повысит лимит.
+
+Если service peer находится в IOS XE VRF, static-origin routes из global table
+должны быть leaked в эту VRF до outbound neighbor route-map. Используйте
+`--iosxe-vrf-leak-route-map`, чтобы добавить отдельную permit sequence с match
+на generated prefix-list в существующий leak route-map без изменения текущих
+non-georoute sequences.
 
 ## Маркеры в `frr.conf`
 

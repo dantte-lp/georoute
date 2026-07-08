@@ -66,6 +66,9 @@ func buildIOSXEApplyScript(f cliFlags, candidate string) string {
 		"show ip prefix-list "+f.iosxePrefixList,
 		"show route-map "+f.iosxeRouteMap,
 	)
+	if f.iosxeVRFLeakRouteMap != "" {
+		commands = append(commands, "show route-map "+f.iosxeVRFLeakRouteMap)
+	}
 	if f.iosxeStaticRouteMap != "" {
 		commands = append(commands, "show route-map "+f.iosxeStaticRouteMap)
 	}
@@ -85,6 +88,9 @@ func verifyIOSXEApplyOutput(f cliFlags, out string) error {
 		}
 	}
 	required := []string{f.iosxePrefixList, f.iosxeRouteMap}
+	if f.iosxeVRFLeakRouteMap != "" {
+		required = append(required, f.iosxeVRFLeakRouteMap)
+	}
 	if f.iosxeStaticRouteMap != "" {
 		required = append(required, f.iosxeStaticRouteMap)
 	}

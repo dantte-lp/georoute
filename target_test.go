@@ -14,6 +14,7 @@ const (
 	iosxeRUOutRouteMapTest     = "RM-RU-GEOROUTE-OUT"
 	iosxeRUStaticRouteMapTest  = "RM-GEOROUTE-RU-STATIC"
 	iosxeRUStaticRouteNameTest = "GEOROUTE_RU"
+	iosxeGlobalToTransitTest   = "RM-GLOBAL-TO-TRANSIT"
 )
 
 func mustPrefix(t *testing.T, s string) netip.Prefix {
@@ -134,6 +135,29 @@ func TestRenderIOSXECandidateWithStaticOrigin(t *testing.T) {
 		" address-family ipv4\n" +
 		"  redistribute static route-map " + iosxeRUStaticRouteMapTest + "\n" +
 		" exit-address-family"
+	if got != want {
+		t.Fatalf("renderIOSXECandidate() = %q, want %q", got, want)
+	}
+}
+
+func TestRenderIOSXECandidateWithVRFLeakRouteMap(t *testing.T) {
+	t.Parallel()
+	prefixes := []netip.Prefix{mustPrefix(t, "203.0.113.0/24")}
+	got := renderIOSXECandidate(cliFlags{
+		iosxePrefixList:         iosxeRUPrefixListTest,
+		iosxeRouteMap:           iosxeRUOutRouteMapTest,
+		iosxeVRFLeakRouteMap:    iosxeGlobalToTransitTest,
+		iosxeRouteMapSeq:        20,
+		iosxeVRFLeakRouteMapSeq: 20,
+		iosxeRouteMapDenySeq:    9999,
+	}, prefixes)
+	want := "ip prefix-list " + iosxeRUPrefixListTest + " seq 10 permit 203.0.113.0/24\n" +
+		"ip prefix-list " + iosxeRUPrefixListTest + " seq 999999 deny 0.0.0.0/0 le 32\n" +
+		"route-map " + iosxeGlobalToTransitTest + " permit 20\n" +
+		" match ip address prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"route-map RM-RU-GEOROUTE-OUT permit 20\n" +
+		" match ip address prefix-list " + iosxeRUPrefixListTest + "\n" +
+		"route-map RM-RU-GEOROUTE-OUT deny 9999"
 	if got != want {
 		t.Fatalf("renderIOSXECandidate() = %q, want %q", got, want)
 	}

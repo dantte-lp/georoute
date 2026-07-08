@@ -12,24 +12,25 @@ import (
 )
 
 const (
-	defaultTarget            = "frr"
-	defaultTargetMode        = "apply"
-	defaultSeqStep           = 10
-	defaultRouteMapSeq       = 10
-	defaultDenySeq           = 9999
-	iosxeDenyTailSeq         = 999999
-	targetFRR                = "frr"
-	targetFile               = "file"
-	targetIOSXE              = "iosxe"
-	targetModeApply          = "apply"
-	targetModeRender         = "render"
-	targetOutputStdout       = "-"
-	iosxePrefixListBase      = "PL-GEOROUTE-%s-V4"
-	iosxeRouteMapBase        = "RM-GEOROUTE-%s-OUT"
-	iosxeStaticRouteMapBase  = "RM-GEOROUTE-%s-STATIC"
-	iosxeStaticRouteNameBase = "GEOROUTE_%s"
-	defaultIOSXESSHPort      = 22
-	defaultIOSXESSHTimeout   = 30 * time.Second
+	defaultTarget             = "frr"
+	defaultTargetMode         = "apply"
+	defaultSeqStep            = 10
+	defaultRouteMapSeq        = 10
+	defaultVRFLeakRouteMapSeq = 20
+	defaultDenySeq            = 9999
+	iosxeDenyTailSeq          = 999999
+	targetFRR                 = "frr"
+	targetFile                = "file"
+	targetIOSXE               = "iosxe"
+	targetModeApply           = "apply"
+	targetModeRender          = "render"
+	targetOutputStdout        = "-"
+	iosxePrefixListBase       = "PL-GEOROUTE-%s-V4"
+	iosxeRouteMapBase         = "RM-GEOROUTE-%s-OUT"
+	iosxeStaticRouteMapBase   = "RM-GEOROUTE-%s-STATIC"
+	iosxeStaticRouteNameBase  = "GEOROUTE_%s"
+	defaultIOSXESSHPort       = 22
+	defaultIOSXESSHTimeout    = 30 * time.Second
 )
 
 var (
@@ -69,6 +70,18 @@ func renderIOSXERouteMap(name, prefixList string, permitSeq, denySeq int) string
 
 	return fmt.Sprintf("route-map %s permit %d\n match ip address prefix-list %s\nroute-map %s deny %d",
 		name, permitSeq, prefixList, name, denySeq)
+}
+
+func renderIOSXERouteMapPermit(name, prefixList string, permitSeq int) string {
+	if name == "" || prefixList == "" {
+		return ""
+	}
+	if permitSeq <= 0 {
+		permitSeq = defaultVRFLeakRouteMapSeq
+	}
+
+	return fmt.Sprintf("route-map %s permit %d\n match ip address prefix-list %s",
+		name, permitSeq, prefixList)
 }
 
 func renderIOSXEStaticRoutes(prefixes []netip.Prefix, nextHop, routeName string, tag int) string {
@@ -136,6 +149,7 @@ func renderIOSXECandidate(f cliFlags, prefixes []netip.Prefix) string {
 		renderIOSXEPrefixList(f.iosxePrefixList, prefixes, defaultSeqStep),
 		renderIOSXEStaticRoutes(prefixes, f.iosxeStaticNextHop, f.iosxeStaticRouteName, f.iosxeStaticTag),
 		renderIOSXERedistributeStatic(staticRouteMap, f.iosxePrefixList, defaultRouteMapSeq, f.iosxeRouteMapDenySeq),
+		renderIOSXERouteMapPermit(f.iosxeVRFLeakRouteMap, f.iosxePrefixList, f.iosxeVRFLeakRouteMapSeq),
 		renderIOSXERouteMap(f.iosxeRouteMap, f.iosxePrefixList, f.iosxeRouteMapSeq, f.iosxeRouteMapDenySeq),
 		renderIOSXEBGPRedistributeStatic(f.iosxeBGPAS, staticRouteMap),
 	}

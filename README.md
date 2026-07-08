@@ -131,7 +131,7 @@ georoute --country=RU --target=file --mode=render --target-output=ru-prefixes.tx
 georoute --country=RU --target=iosxe --mode=render --target-output=iosxe-ru.cfg
 georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --target-output=iosxe-ru.cfg
 georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --target-output=iosxe-ru-c8000v.cfg
-georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --iosxe-static-next-hop=94.139.250.25 --iosxe-bgp-as=4200099722 --target-output=iosxe-ru-c8000v-static-origin.cfg
+georoute --country=RU --target=iosxe --mode=render --iosxe-replace-prefix-list --iosxe-route-map=RM-RU-GEOROUTE-OUT --iosxe-route-map-seq=20 --iosxe-static-next-hop=94.139.250.25 --iosxe-bgp-as=4200099722 --iosxe-vrf-leak-route-map=RM-GLOBAL-TO-TRANSIT --iosxe-vrf-leak-route-map-seq=20 --target-output=iosxe-ru-c8000v-static-origin.cfg
 ```
 
 For C8000V loads, use `--iosxe-replace-prefix-list` when the generated
@@ -141,6 +141,9 @@ entries before re-creating the current feed object. Use
 route-map without replacing its current sequence. Use
 `--iosxe-static-next-hop` plus `--iosxe-bgp-as` when the router must originate
 the feed with generated static routes and `redistribute static route-map`.
+Use `--iosxe-vrf-leak-route-map` when generated global BGP prefixes must be
+leaked into a service VRF before the outbound neighbor policy can advertise
+them.
 
 Containerized development:
 

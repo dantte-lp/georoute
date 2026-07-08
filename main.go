@@ -91,56 +91,58 @@ func main() {
 type cliFlags struct {
 	// strings first (16 B each on 64-bit) for field-alignment, durations
 	// next, ints, bools last.
-	frrConf                string
-	lockFile               string
-	country                string
-	routeMap               string
-	nftSetV4               string
-	nftSetV6               string
-	markerPrefix           string
-	feedURL                string
-	extrasV4File           string
-	extrasV6File           string
-	cacheFile              string
-	httpAddr               string
-	lastSuccessFile        string
-	logFormat              string
-	logLevel               string
-	frrReloadScript        string
-	nftBinary              string
-	target                 string
-	targetMode             string
-	targetOutput           string
-	iosxePrefixList        string
-	iosxeRouteMap          string
-	iosxeStaticNextHop     string
-	iosxeStaticRouteMap    string
-	iosxeStaticRouteName   string
-	iosxeBGPAS             string
-	iosxeSSHHost           string
-	iosxeSSHUser           string
-	iosxeSSHKeyFile        string
-	iosxeKnownHostsFile    string
-	cacheMaxAge            time.Duration
-	readyMaxAge            time.Duration
-	httpTimeout            time.Duration
-	frrReloadTimeout       time.Duration
-	nftTimeout             time.Duration
-	iosxeSSHTimeout        time.Duration
-	retryBaseDelay         time.Duration
-	refreshInterval        time.Duration
-	retryAttempts          int
-	iosxeSSHPort           int
-	iosxeRouteMapSeq       int
-	iosxeRouteMapDenySeq   int
-	iosxeStaticTag         int
-	iosxeApplyMaxPrefixes  int
-	iosxeSaveConfig        bool
-	reloadOK               bool
-	dryRun                 bool
-	force                  bool
-	updateNft              bool
-	iosxeReplacePrefixList bool
+	frrConf                 string
+	lockFile                string
+	country                 string
+	routeMap                string
+	nftSetV4                string
+	nftSetV6                string
+	markerPrefix            string
+	feedURL                 string
+	extrasV4File            string
+	extrasV6File            string
+	cacheFile               string
+	httpAddr                string
+	lastSuccessFile         string
+	logFormat               string
+	logLevel                string
+	frrReloadScript         string
+	nftBinary               string
+	target                  string
+	targetMode              string
+	targetOutput            string
+	iosxePrefixList         string
+	iosxeRouteMap           string
+	iosxeStaticNextHop      string
+	iosxeStaticRouteMap     string
+	iosxeStaticRouteName    string
+	iosxeBGPAS              string
+	iosxeSSHHost            string
+	iosxeSSHUser            string
+	iosxeSSHKeyFile         string
+	iosxeKnownHostsFile     string
+	iosxeVRFLeakRouteMap    string
+	cacheMaxAge             time.Duration
+	readyMaxAge             time.Duration
+	httpTimeout             time.Duration
+	frrReloadTimeout        time.Duration
+	nftTimeout              time.Duration
+	iosxeSSHTimeout         time.Duration
+	retryBaseDelay          time.Duration
+	refreshInterval         time.Duration
+	retryAttempts           int
+	iosxeSSHPort            int
+	iosxeRouteMapSeq        int
+	iosxeRouteMapDenySeq    int
+	iosxeVRFLeakRouteMapSeq int
+	iosxeStaticTag          int
+	iosxeApplyMaxPrefixes   int
+	iosxeSaveConfig         bool
+	reloadOK                bool
+	dryRun                  bool
+	force                   bool
+	updateNft               bool
+	iosxeReplacePrefixList  bool
 }
 
 // applyDefaults fills the country-dependent fields from `country` when the
@@ -261,6 +263,9 @@ func (f *cliFlags) applyIOSXEDefaults(cc string) {
 	if f.iosxeRouteMapDenySeq == 0 {
 		f.iosxeRouteMapDenySeq = defaultDenySeq
 	}
+	if f.iosxeVRFLeakRouteMapSeq == 0 {
+		f.iosxeVRFLeakRouteMapSeq = defaultVRFLeakRouteMapSeq
+	}
 }
 
 // markers returns the four marker comment lines used to delimit per-country
@@ -325,10 +330,12 @@ func realMain() int {
 	flag.StringVar(&flags.iosxeSSHUser, "iosxe-ssh-user", "", "IOS XE SSH username for apply mode")
 	flag.StringVar(&flags.iosxeSSHKeyFile, "iosxe-ssh-key-file", "", "IOS XE SSH private key file for apply mode")
 	flag.StringVar(&flags.iosxeKnownHostsFile, "iosxe-known-hosts-file", "", "known_hosts file for IOS XE SSH host key verification")
+	flag.StringVar(&flags.iosxeVRFLeakRouteMap, "iosxe-vrf-leak-route-map", "", "optional IOS XE route-map name used to leak generated prefixes into a service VRF")
 	flag.IntVar(&flags.iosxeSSHPort, "iosxe-ssh-port", 0, "IOS XE SSH port for apply mode (default 22)")
 	flag.DurationVar(&flags.iosxeSSHTimeout, "iosxe-ssh-timeout", 0, "IOS XE SSH dial/session timeout for apply mode (default 30s)")
 	flag.IntVar(&flags.iosxeRouteMapSeq, "iosxe-route-map-seq", 0, "IOS XE route-map permit sequence for rendered prefix-list match (default 10)")
 	flag.IntVar(&flags.iosxeRouteMapDenySeq, "iosxe-route-map-deny-seq", 0, "IOS XE route-map explicit deny sequence (default 9999)")
+	flag.IntVar(&flags.iosxeVRFLeakRouteMapSeq, "iosxe-vrf-leak-route-map-seq", 0, "IOS XE route-map permit sequence for optional VRF leak route-map (default 20)")
 	flag.IntVar(&flags.iosxeStaticTag, "iosxe-static-tag", 0, "optional IOS XE static route tag for generated routes")
 	flag.IntVar(&flags.iosxeApplyMaxPrefixes, "iosxe-apply-max-prefixes", 100, "maximum IPv4 prefixes allowed in IOS XE apply mode; set higher explicitly for production feed")
 	flag.BoolVar(&flags.iosxeSaveConfig, "iosxe-save-config", false, "write memory after IOS XE apply postcheck succeeds")
