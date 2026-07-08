@@ -152,7 +152,7 @@ func TestRenderPrefixLines(t *testing.T) {
 	}
 }
 
-func TestRunTargetRejectsApplyMode(t *testing.T) {
+func TestRunTargetApplyModeRequiresSSHConfig(t *testing.T) {
 	t.Parallel()
 	flags := cliFlags{
 		target:                targetIOSXE,
@@ -171,10 +171,10 @@ func TestRunTargetRejectsApplyMode(t *testing.T) {
 		mustPrefix(t, "203.0.113.0/24"),
 	})
 	if err == nil {
-		t.Fatal("runTarget() error = nil, want apply-mode error")
+		t.Fatal("runTarget() error = nil, want apply config error")
 	}
-	if !strings.Contains(err.Error(), "apply transport is not implemented yet") {
-		t.Fatalf("runTarget() error = %q, want apply transport guard", err)
+	if !strings.Contains(err.Error(), "--iosxe-ssh-host is required") {
+		t.Fatalf("runTarget() error = %q, want SSH config guard", err)
 	}
 }
 

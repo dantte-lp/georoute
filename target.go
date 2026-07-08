@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -27,12 +28,15 @@ const (
 	iosxeRouteMapBase        = "RM-GEOROUTE-%s-OUT"
 	iosxeStaticRouteMapBase  = "RM-GEOROUTE-%s-STATIC"
 	iosxeStaticRouteNameBase = "GEOROUTE_%s"
+	defaultIOSXESSHPort      = 22
+	defaultIOSXESSHTimeout   = 30 * time.Second
 )
 
 var (
 	errUnsupportedTarget     = errors.New("unsupported target")
 	errUnsupportedTargetMode = errors.New("unsupported target mode")
 	errApplyPrefixLimit      = errors.New("iosxe apply prefix limit exceeded")
+	errIOSXEApplyConfig      = errors.New("iosxe apply configuration incomplete")
 )
 
 func renderIOSXEPrefixList(name string, prefixes []netip.Prefix, seqStep int) string {
@@ -196,7 +200,12 @@ func runTarget(ctx context.Context, f cliFlags, logger *slog.Logger, v4Agg []net
 		return nil
 	}
 	if f.targetMode != targetModeRender {
-		return validateIOSXEApplyGuard(f, len(v4Agg))
+		err = validateIOSXEApplyGuard(f, len(v4Agg))
+		if err != nil {
+			return err
+		}
+
+		return applyIOSXEOverSSH(ctx, f, candidate, logger)
 	}
 
 	return writeTargetOutput(f.targetOutput, candidate)
@@ -210,9 +219,20 @@ func validateIOSXEApplyGuard(f cliFlags, prefixCount int) error {
 	if f.iosxeApplyMaxPrefixes > 0 && prefixCount > f.iosxeApplyMaxPrefixes {
 		return fmt.Errorf("%w: prefixes=%d max=%d", errApplyPrefixLimit, prefixCount, f.iosxeApplyMaxPrefixes)
 	}
+	if f.iosxeSSHHost == "" {
+		return fmt.Errorf("%w: --iosxe-ssh-host is required", errIOSXEApplyConfig)
+	}
+	if f.iosxeSSHUser == "" {
+		return fmt.Errorf("%w: --iosxe-ssh-user is required", errIOSXEApplyConfig)
+	}
+	if f.iosxeSSHKeyFile == "" {
+		return fmt.Errorf("%w: --iosxe-ssh-key-file is required", errIOSXEApplyConfig)
+	}
+	if f.iosxeKnownHostsFile == "" {
+		return fmt.Errorf("%w: --iosxe-known-hosts-file is required", errIOSXEApplyConfig)
+	}
 
-	return fmt.Errorf("%w: target %q apply transport is not implemented yet; use %q for candidate generation",
-		errUnsupportedTargetMode, f.target, targetModeRender)
+	return nil
 }
 
 func writeTargetOutput(path, contents string) error {

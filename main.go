@@ -117,18 +117,25 @@ type cliFlags struct {
 	iosxeStaticRouteMap    string
 	iosxeStaticRouteName   string
 	iosxeBGPAS             string
+	iosxeSSHHost           string
+	iosxeSSHUser           string
+	iosxeSSHKeyFile        string
+	iosxeKnownHostsFile    string
 	cacheMaxAge            time.Duration
 	readyMaxAge            time.Duration
 	httpTimeout            time.Duration
 	frrReloadTimeout       time.Duration
 	nftTimeout             time.Duration
+	iosxeSSHTimeout        time.Duration
 	retryBaseDelay         time.Duration
 	refreshInterval        time.Duration
 	retryAttempts          int
+	iosxeSSHPort           int
 	iosxeRouteMapSeq       int
 	iosxeRouteMapDenySeq   int
 	iosxeStaticTag         int
 	iosxeApplyMaxPrefixes  int
+	iosxeSaveConfig        bool
 	reloadOK               bool
 	dryRun                 bool
 	force                  bool
@@ -199,6 +206,12 @@ func (f *cliFlags) applyRuntimeDefaults(ccLower string) {
 	}
 	if f.nftTimeout == 0 {
 		f.nftTimeout = defaultNftTimeout
+	}
+	if f.iosxeSSHTimeout == 0 {
+		f.iosxeSSHTimeout = defaultIOSXESSHTimeout
+	}
+	if f.iosxeSSHPort == 0 {
+		f.iosxeSSHPort = defaultIOSXESSHPort
 	}
 	if f.retryAttempts == 0 {
 		f.retryAttempts = defaultRetryAttempts
@@ -308,10 +321,17 @@ func realMain() int {
 	flag.StringVar(&flags.iosxeStaticRouteMap, "iosxe-static-route-map", "", "IOS XE route-map name for redistribute static (default RM-GEOROUTE-<CC>-STATIC)")
 	flag.StringVar(&flags.iosxeStaticRouteName, "iosxe-static-route-name", "", "IOS XE static route name for generated routes (default GEOROUTE_<CC>)")
 	flag.StringVar(&flags.iosxeBGPAS, "iosxe-bgp-as", "", "IOS XE BGP AS used to render redistribute static route-map; empty disables BGP stanza")
+	flag.StringVar(&flags.iosxeSSHHost, "iosxe-ssh-host", "", "IOS XE SSH host for apply mode")
+	flag.StringVar(&flags.iosxeSSHUser, "iosxe-ssh-user", "", "IOS XE SSH username for apply mode")
+	flag.StringVar(&flags.iosxeSSHKeyFile, "iosxe-ssh-key-file", "", "IOS XE SSH private key file for apply mode")
+	flag.StringVar(&flags.iosxeKnownHostsFile, "iosxe-known-hosts-file", "", "known_hosts file for IOS XE SSH host key verification")
+	flag.IntVar(&flags.iosxeSSHPort, "iosxe-ssh-port", 0, "IOS XE SSH port for apply mode (default 22)")
+	flag.DurationVar(&flags.iosxeSSHTimeout, "iosxe-ssh-timeout", 0, "IOS XE SSH dial/session timeout for apply mode (default 30s)")
 	flag.IntVar(&flags.iosxeRouteMapSeq, "iosxe-route-map-seq", 0, "IOS XE route-map permit sequence for rendered prefix-list match (default 10)")
 	flag.IntVar(&flags.iosxeRouteMapDenySeq, "iosxe-route-map-deny-seq", 0, "IOS XE route-map explicit deny sequence (default 9999)")
 	flag.IntVar(&flags.iosxeStaticTag, "iosxe-static-tag", 0, "optional IOS XE static route tag for generated routes")
 	flag.IntVar(&flags.iosxeApplyMaxPrefixes, "iosxe-apply-max-prefixes", 100, "maximum IPv4 prefixes allowed in IOS XE apply mode; set higher explicitly for production feed")
+	flag.BoolVar(&flags.iosxeSaveConfig, "iosxe-save-config", false, "write memory after IOS XE apply postcheck succeeds")
 	flag.BoolVar(&flags.iosxeReplacePrefixList, "iosxe-replace-prefix-list", false, "render 'no ip prefix-list <name>' before IOS XE prefix-list entries for idempotent replace")
 	flag.DurationVar(&flags.refreshInterval, "refresh-interval", 0, "when >0 + --http-addr set, re-run the work pipeline every interval (daemon mode). 0 means oneshot semantics: run once and park on SIGTERM.")
 	flag.Parse()

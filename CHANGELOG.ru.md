@@ -27,6 +27,10 @@
   - `--iosxe-apply-max-prefixes` добавляет safety guard для будущего IOS XE
     apply-mode; полный feed должен повышать лимит явно только после реализации
     diff/postcheck.
+  - `--iosxe-ssh-host`, `--iosxe-ssh-port`, `--iosxe-ssh-user`,
+    `--iosxe-ssh-key-file`, `--iosxe-known-hosts-file`, `--iosxe-ssh-timeout` и
+    `--iosxe-save-config` добавляют public-key SSH apply-path для bounded
+    загрузки IOS XE candidate с проверкой host key и show-based postcheck.
 - Podman development flow:
   - `Containerfile.dev` собирает Go 1.26 dev-image с закреплённым
     `golangci-lint`.
