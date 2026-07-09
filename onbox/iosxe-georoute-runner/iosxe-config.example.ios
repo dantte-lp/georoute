@@ -10,6 +10,7 @@ app-hosting appid georoute-runner
  app-default-gateway 198.18.201.1 guest-interface 0
  app-resource docker
   run-opts 1 "-v $(APP_DATA):/data -p 8080:8080"
+  run-opts 2 "-e GEOROUTE_FEED_URL=https://stat.ripe.net/data/country-resource-list/data.json?resource=RU&v4_format=prefix"
 !
 interface VirtualPortGroup2
  description georoute-runner isolated management

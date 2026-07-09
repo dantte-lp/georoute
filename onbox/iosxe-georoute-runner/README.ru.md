@@ -14,6 +14,7 @@ Hosting. Приложение формирует scoped candidate-конфигу
 - redistribution route-map для static routes использует `match tag 201`; prefix-list используется
   как guardrail и для outbound-policy;
 - feed не должен содержать `0.0.0.0/0`, RFC1918, RFC6598 и внутренний блок `10.64.0.0/15`.
+- feed source: plain text prefix list или RIPE Stat `country-resource-list` JSON.
 
 ## Проверка
 
@@ -48,6 +49,11 @@ show app-hosting list
 ```
 
 Шаблон конфигурации сети и ресурсов: `iosxe-config.example.ios`.
+Production feed URL для RU:
+
+```text
+https://stat.ripe.net/data/country-resource-list/data.json?resource=RU&v4_format=prefix
+```
 
 Smoke-test перед переносом на C8000V:
 
@@ -56,6 +62,10 @@ printf '2.60.0.0/14\n' > /tmp/georoute-prefixes.txt
 podman run --rm \
   -v /tmp/georoute-prefixes.txt:/data/prefixes.txt:Z \
   localhost/iosxe-georoute-runner:0.1.0 render
+podman run --rm --network host \
+  localhost/iosxe-georoute-runner:0.1.0 render \
+  --prefix-file /missing \
+  --feed-url http://127.0.0.1:18081/feed.txt
 podman run --rm -p 127.0.0.1:18080:8080 \
   -v /tmp/georoute-prefixes.txt:/data/prefixes.txt:Z \
   localhost/iosxe-georoute-runner:0.1.0 serve

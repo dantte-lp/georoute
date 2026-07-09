@@ -25,6 +25,9 @@
   - Multi-stage Python 3.14 container image, идемпотентный `make package`,
     IOS XE app-hosting resource template и smoke-tested entrypoints `render` /
     HTTP serve.
+  - Prefix source selection для on-box runner: существующий local prefix file
+    имеет приоритет, иначе используется `GEOROUTE_FEED_URL`; поддержаны RIPE
+    Stat `country-resource-list` JSON и plain text prefix feeds.
 - Экспериментальный режим target-rendering для маршрутизаторов вне FRR:
   - `--target=file --mode=render` пишет по одному агрегированному IPv4
     префиксу на строку.

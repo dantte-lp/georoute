@@ -26,6 +26,9 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   - Multi-stage Python 3.14 container image, idempotent `make package` build,
     IOS XE app-hosting resource template, and smoke-tested `render` / HTTP
     serve entrypoints.
+  - Prefix source selection for the on-box runner: existing local prefix file
+    first, otherwise `GEOROUTE_FEED_URL`; RIPE Stat `country-resource-list`
+    JSON and plain text prefix feeds are supported.
 - Experimental target rendering mode for non-FRR routers:
   - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
   - `--target=iosxe --mode=render` writes deterministic IOS XE `ip prefix-list`

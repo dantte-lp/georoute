@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterable
 from time import sleep
 
@@ -16,6 +17,15 @@ def parse_prefix_lines(lines: Iterable[str]) -> PrefixSet:
     return normalize_prefixes(prefixes)
 
 
+def parse_feed_text(text: str) -> PrefixSet:
+    stripped = text.lstrip()
+    if stripped.startswith("{"):
+        payload = json.loads(text)
+        resources = payload["data"]["resources"]
+        return normalize_prefixes(resources["ipv4"])
+    return parse_prefix_lines(text.splitlines())
+
+
 def fetch_text_feed(
     url: str,
     timeout: float = 10.0,
@@ -32,7 +42,7 @@ def fetch_text_feed(
             with httpx.Client(timeout=timeout, follow_redirects=True, trust_env=False) as client:
                 response = client.get(url)
                 response.raise_for_status()
-            return parse_prefix_lines(response.text.splitlines())
+            return parse_feed_text(response.text)
         except httpx.HTTPError as exc:
             last_error = exc
             if attempt + 1 >= retry_attempts:
