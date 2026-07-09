@@ -19,6 +19,9 @@
   - Local HTTP candidate endpoints, freshness-aware readiness, refresh lock,
     last-success marker и bounded feed retries для IOS XE `copy http:`
     workflow.
+  - IOS XE apply orchestration helpers для URL syntax-check, local merge-copy,
+    EEM applet rendering, candidate hash stop-condition, postcheck commands и
+    previous-candidate rollback command generation.
 - Экспериментальный режим target-rendering для маршрутизаторов вне FRR:
   - `--target=file --mode=render` пишет по одному агрегированному IPv4
     префиксу на строку.

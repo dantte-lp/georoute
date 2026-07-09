@@ -20,6 +20,9 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   - Local HTTP candidate endpoints, readiness freshness checks, refresh lock,
     last-success marker, and bounded feed retry support for IOS XE `copy http:`
     workflows.
+  - IOS XE apply orchestration helpers for URL syntax-check, local merge-copy,
+    EEM applet rendering, candidate hash stop-condition, postcheck commands,
+    and previous-candidate rollback command generation.
 - Experimental target rendering mode for non-FRR routers:
   - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
   - `--target=iosxe --mode=render` writes deterministic IOS XE `ip prefix-list`
