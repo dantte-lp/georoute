@@ -9,6 +9,14 @@ from .server import serve
 from .validate import PrefixSet
 
 
+def default_feed_url(country: str) -> str:
+    normalized_country = country.upper()
+    return (
+        "https://stat.ripe.net/data/country-resource-list/data.json"
+        f"?resource={normalized_country}&v4_format=prefix"
+    )
+
+
 def load_prefix_set(prefix_file: str | None, feed_url: str | None) -> PrefixSet:
     if prefix_file is not None and Path(prefix_file).is_file():
         with open(prefix_file, encoding="utf-8") as fh:
@@ -28,6 +36,7 @@ def main() -> None:
         "--prefix-file",
         default=os.getenv("GEOROUTE_PREFIX_FILE", "/data/prefixes.txt"),
     )
+    render_parser.add_argument("--country", default=os.getenv("GEOROUTE_COUNTRY", "RU"))
     render_parser.add_argument("--feed-url", default=os.getenv("GEOROUTE_FEED_URL"))
 
     serve_parser = subparsers.add_parser("serve")
@@ -35,6 +44,7 @@ def main() -> None:
         "--prefix-file",
         default=os.getenv("GEOROUTE_PREFIX_FILE", "/data/prefixes.txt"),
     )
+    serve_parser.add_argument("--country", default=os.getenv("GEOROUTE_COUNTRY", "RU"))
     serve_parser.add_argument("--feed-url", default=os.getenv("GEOROUTE_FEED_URL"))
     serve_parser.add_argument("--host", default=os.getenv("GEOROUTE_HTTP_HOST", "0.0.0.0"))
     serve_parser.add_argument(
@@ -48,7 +58,7 @@ def main() -> None:
     if args.command is None:
         args = parser.parse_args(["serve"])
 
-    prefix_set = load_prefix_set(args.prefix_file, args.feed_url)
+    prefix_set = load_prefix_set(args.prefix_file, args.feed_url or default_feed_url(args.country))
     config = RunnerConfig()
 
     if args.command == "serve":

@@ -10,6 +10,13 @@ import pytest
 import iosxe_georoute_runner.__main__ as cli
 
 
+def test_default_feed_url_uses_ripe_country_resource_list() -> None:
+    assert (
+        cli.default_feed_url("ru")
+        == "https://stat.ripe.net/data/country-resource-list/data.json?resource=RU&v4_format=prefix"
+    )
+
+
 def test_load_prefix_set_prefers_existing_file_over_feed_url(tmp_path: Path) -> None:
     prefix_file = tmp_path / "prefixes.txt"
     prefix_file.write_text("2.60.0.0/14\n", encoding="utf-8")

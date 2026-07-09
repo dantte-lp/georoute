@@ -4,6 +4,14 @@
 Hosting. Приложение формирует scoped candidate-конфигурацию RU-префиксов и отдаёт её
 локальному IOS XE через HTTP endpoint для последующего `copy ... running-config`.
 
+## Статус реализации
+
+Текущая реализация — Python 3.14 PoC для быстрой проверки IOS XE Application
+Hosting, VPG-связности, local HTTP endpoint и `copy ... running-config`.
+Целевое состояние после live validation — Go-реализация внутри основного
+`georoute`: один статический бинарь, меньший container image, меньше runtime
+dependencies, ниже расход RAM/диска и проще эксплуатация на C8000V IOx.
+
 ## Ограничения PoC
 
 - production RU feed не применяется без отдельного controlled test;
@@ -42,14 +50,14 @@ make package
 IOS XE lifecycle:
 
 ```ios
-app-hosting install appid georoute-runner package bootflash:georoute-runner.tar
-app-hosting activate appid georoute-runner
-app-hosting start appid georoute-runner
+app-hosting install appid georoute_runner package bootflash:georoute-runner.tar
+app-hosting activate appid georoute_runner
+app-hosting start appid georoute_runner
 show app-hosting list
 ```
 
 Шаблон конфигурации сети и ресурсов: `iosxe-config.example.ios`.
-Production feed URL для RU:
+По умолчанию runner строит production feed URL для `GEOROUTE_COUNTRY=RU`:
 
 ```text
 https://stat.ripe.net/data/country-resource-list/data.json?resource=RU&v4_format=prefix
