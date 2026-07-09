@@ -10,6 +10,7 @@ def render_candidate(prefix_set: PrefixSet, config: RunnerConfig) -> str:
     parts = [
         render_prefix_list(prefix_set.prefixes, config),
         render_route_maps(config),
+        render_bgp_redistribution(config),
         render_static_routes(prefix_set.prefixes, config),
     ]
     return "\n".join(part for part in parts if part).strip() + "\n"
@@ -33,6 +34,17 @@ def render_route_maps(config: RunnerConfig) -> str:
             f"route-map {config.static_route_map} permit 10",
             f" match tag {config.route_tag}",
             f"route-map {config.static_route_map} deny 9999",
+        ]
+    )
+
+
+def render_bgp_redistribution(config: RunnerConfig) -> str:
+    return "\n".join(
+        [
+            f"router bgp {config.bgp_as}",
+            f" address-family ipv4 vrf {config.vrf_name}",
+            f"  redistribute static route-map {config.static_route_map}",
+            " exit-address-family",
         ]
     )
 

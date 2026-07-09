@@ -27,6 +27,8 @@ def test_render_vrf_direct_static_routes() -> None:
     assert (
         "ip route vrf VRF-TRANSIT 2.60.0.0 255.252.0.0 203.0.113.1 global tag 201 name GEOROUTE_RU"
     ) in candidate
+    assert "router bgp 4200099722\n address-family ipv4 vrf VRF-TRANSIT" in candidate
+    assert "  redistribute static route-map RM-GEOROUTE-RU-STATIC" in candidate
 
 
 def test_render_global_replicated_static_routes() -> None:

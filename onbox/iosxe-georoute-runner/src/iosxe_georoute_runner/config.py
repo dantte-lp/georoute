@@ -8,6 +8,7 @@ RouteMode = Literal["global-replicated", "vrf-direct"]
 
 class RunnerConfig(BaseModel):
     country_code: str = Field(default="RU", min_length=2, max_length=2)
+    bgp_as: int = 4_200_099_722
     vrf_name: str = "VRF-TRANSIT"
     prefix_list_name: str = "PL-GEOROUTE-RU-V4"
     global_to_vrf_route_map: str = "RM-GLOBAL-TO-TRANSIT"
