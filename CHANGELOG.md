@@ -7,6 +7,14 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Experimental C8000V on-box runner under `onbox/iosxe-georoute-runner`:
+  - Python 3.14 `uv` project with locked dependencies, `ruff`, `ty`, and
+    `pytest` gates.
+  - Deterministic IOS XE candidate rendering for RU static routes.
+  - Safety validation rejects `0.0.0.0/0`, RFC1918, RFC6598, and the internal
+    `10.64.0.0/15` block from the feed.
+  - Static redistribution policy renders `match tag 201`; prefix-lists remain
+    guardrails and outbound policy objects.
 - Experimental target rendering mode for non-FRR routers:
   - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
   - `--target=iosxe --mode=render` writes deterministic IOS XE `ip prefix-list`

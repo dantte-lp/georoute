@@ -7,6 +7,13 @@
 ## [Unreleased]
 
 ### Добавлено
+- Экспериментальный C8000V on-box runner в `onbox/iosxe-georoute-runner`:
+  - Python 3.14 `uv` project с lockfile, `ruff`, `ty` и `pytest` gates.
+  - Детерминированный рендер IOS XE candidate для RU static routes.
+  - Safety validation отклоняет `0.0.0.0/0`, RFC1918, RFC6598 и внутренний
+    блок `10.64.0.0/15` из feed.
+  - Static redistribution policy рендерит `match tag 201`; prefix-list остаётся
+    guardrail и объектом outbound policy.
 - Экспериментальный режим target-rendering для маршрутизаторов вне FRR:
   - `--target=file --mode=render` пишет по одному агрегированному IPv4
     префиксу на строку.

@@ -1,0 +1,11 @@
+app:
+  id: georoute-runner
+  version: 0.1.0
+  description: IOS XE georoute runner for RU prefix candidate rendering
+  type: docker
+resources:
+  cpu: 500
+  memory: 512
+  disk: 256
+network:
+  mode: vpg
