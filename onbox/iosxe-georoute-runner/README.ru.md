@@ -4,9 +4,9 @@
 Hosting. Приложение формирует scoped candidate-конфигурацию RU-префиксов и отдаёт её
 локальному IOS XE через HTTP endpoint для последующего `copy ... running-config`.
 
-## Ограничения Sprint 1
+## Ограничения PoC
 
-- live apply не выполняется;
+- production RU feed не применяется без отдельного controlled test;
 - SSH paste не используется;
 - candidate содержит только управляемые объекты `PL-GEOROUTE-RU-V4`,
   `RM-GLOBAL-TO-TRANSIT`, `RM-RU-GEOROUTE-OUT`, `RM-GEOROUTE-RU-STATIC` и static routes
@@ -24,4 +24,39 @@ uv run ruff format --check
 uv run ruff check
 uv run ty check
 uv run pytest
+```
+
+## Сборка package
+
+```bash
+make package
+```
+
+Результат:
+
+- `dist/georoute-runner.tar` — container image tar для передачи на `bootflash:`;
+- `dist/georoute-runner.tar.sha256` — контрольная сумма package.
+- `dist/` является build artifact и не коммитится.
+
+IOS XE lifecycle:
+
+```ios
+app-hosting install appid georoute-runner package bootflash:georoute-runner.tar
+app-hosting activate appid georoute-runner
+app-hosting start appid georoute-runner
+show app-hosting list
+```
+
+Шаблон конфигурации сети и ресурсов: `iosxe-config.example.ios`.
+
+Smoke-test перед переносом на C8000V:
+
+```bash
+printf '2.60.0.0/14\n' > /tmp/georoute-prefixes.txt
+podman run --rm \
+  -v /tmp/georoute-prefixes.txt:/data/prefixes.txt:Z \
+  localhost/iosxe-georoute-runner:0.1.0 render
+podman run --rm -p 127.0.0.1:18080:8080 \
+  -v /tmp/georoute-prefixes.txt:/data/prefixes.txt:Z \
+  localhost/iosxe-georoute-runner:0.1.0 serve
 ```

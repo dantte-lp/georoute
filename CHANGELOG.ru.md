@@ -22,6 +22,9 @@
   - IOS XE apply orchestration helpers для URL syntax-check, local merge-copy,
     EEM applet rendering, candidate hash stop-condition, postcheck commands и
     previous-candidate rollback command generation.
+  - Multi-stage Python 3.14 container image, идемпотентный `make package`,
+    IOS XE app-hosting resource template и smoke-tested entrypoints `render` /
+    HTTP serve.
 - Экспериментальный режим target-rendering для маршрутизаторов вне FRR:
   - `--target=file --mode=render` пишет по одному агрегированному IPv4
     префиксу на строку.

@@ -1,0 +1,18 @@
+! C8000V app-hosting skeleton for georoute-runner.
+! Adjust addresses after live VPG allocation validation.
+app-hosting appid georoute-runner
+ app-resource profile custom
+  cpu 500
+  memory 512
+  vcpu 1
+ app-vnic gateway0 virtualportgroup 2 guest-interface 0
+  guest-ipaddress 198.18.201.2 netmask 255.255.255.252
+ app-default-gateway 198.18.201.1 guest-interface 0
+ app-resource docker
+  run-opts 1 "-v $(APP_DATA):/data -p 8080:8080"
+!
+interface VirtualPortGroup2
+ description georoute-runner isolated management
+ ip address 198.18.201.1 255.255.255.252
+!
+iox

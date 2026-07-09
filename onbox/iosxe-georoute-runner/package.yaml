@@ -6,6 +6,10 @@ app:
 resources:
   cpu: 500
   memory: 512
+  vcpu: 1
   disk: 256
 network:
-  mode: vpg
+  mode: virtualportgroup
+  virtualportgroup: 2
+  router_ip: 198.18.201.1/30
+  guest_ip: 198.18.201.2/30

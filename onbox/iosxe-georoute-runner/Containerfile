@@ -1,10 +1,24 @@
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 WORKDIR /app
 COPY pyproject.toml uv.lock README.ru.md ./
 COPY src ./src
 
-RUN uv sync --locked --no-dev
+RUN uv sync --locked --no-dev --compile-bytecode
+
+FROM python:3.14-slim
+
+LABEL org.opencontainers.image.title="iosxe-georoute-runner"
+LABEL org.opencontainers.image.description="C8000V on-box georoute candidate server"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+WORKDIR /app
+COPY --from=builder /app/.venv /app/.venv
+COPY src ./src
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
-ENTRYPOINT ["uv", "run", "iosxe-georoute-runner"]
+ENTRYPOINT ["iosxe-georoute-runner"]
+CMD ["serve"]

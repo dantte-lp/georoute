@@ -23,6 +23,9 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   - IOS XE apply orchestration helpers for URL syntax-check, local merge-copy,
     EEM applet rendering, candidate hash stop-condition, postcheck commands,
     and previous-candidate rollback command generation.
+  - Multi-stage Python 3.14 container image, idempotent `make package` build,
+    IOS XE app-hosting resource template, and smoke-tested `render` / HTTP
+    serve entrypoints.
 - Experimental target rendering mode for non-FRR routers:
   - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
   - `--target=iosxe --mode=render` writes deterministic IOS XE `ip prefix-list`

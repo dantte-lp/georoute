@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from signal import SIGTERM, signal
 
 from .config import RunnerConfig
 from .render import candidate_sha256, render_candidate
@@ -49,4 +50,15 @@ def serve(prefix_set: PrefixSet, config: RunnerConfig, host: str, port: int) -> 
         stale_after=timedelta(minutes=30),
     )
     server = ThreadingHTTPServer((host, port), create_candidate_handler(state))
-    server.serve_forever()
+    previous_handler = signal(SIGTERM, _raise_keyboard_interrupt)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        return
+    finally:
+        server.server_close()
+        signal(SIGTERM, previous_handler)
+
+
+def _raise_keyboard_interrupt(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt
