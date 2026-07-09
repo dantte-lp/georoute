@@ -17,6 +17,9 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
     guardrails and outbound policy objects.
   - Offline diff support parses current IOS XE prefix-lists and tagged static
     routes, then renders cleanup candidates for stale `GEOROUTE_RU` routes.
+  - Local HTTP candidate endpoints, readiness freshness checks, refresh lock,
+    last-success marker, and bounded feed retry support for IOS XE `copy http:`
+    workflows.
 - Experimental target rendering mode for non-FRR routers:
   - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
   - `--target=iosxe --mode=render` writes deterministic IOS XE `ip prefix-list`

@@ -16,6 +16,9 @@
     guardrail и объектом outbound policy.
   - Offline diff support парсит текущие IOS XE prefix-list и tagged static
     routes, затем рендерит cleanup-candidate для stale `GEOROUTE_RU` routes.
+  - Local HTTP candidate endpoints, freshness-aware readiness, refresh lock,
+    last-success marker и bounded feed retries для IOS XE `copy http:`
+    workflow.
 - Экспериментальный режим target-rendering для маршрутизаторов вне FRR:
   - `--target=file --mode=render` пишет по одному агрегированному IPv4
     префиксу на строку.
