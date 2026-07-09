@@ -5,7 +5,7 @@ from pathlib import Path
 from .config import RunnerConfig
 from .feed import fetch_text_feed, parse_prefix_lines
 from .render import candidate_sha256, render_candidate
-from .server import serve
+from .server import serve_with_loader
 from .validate import PrefixSet
 
 
@@ -58,13 +58,20 @@ def main() -> None:
     if args.command is None:
         args = parser.parse_args(["serve"])
 
-    prefix_set = load_prefix_set(args.prefix_file, args.feed_url or default_feed_url(args.country))
     config = RunnerConfig()
 
     if args.command == "serve":
-        serve(prefix_set, config, args.host, args.port)
+        serve_with_loader(
+            lambda: load_prefix_set(
+                args.prefix_file, args.feed_url or default_feed_url(args.country)
+            ),
+            config,
+            args.host,
+            args.port,
+        )
         return
 
+    prefix_set = load_prefix_set(args.prefix_file, args.feed_url or default_feed_url(args.country))
     candidate = render_candidate(prefix_set, config)
     print(candidate, end="")
     print(f"! sha256 {candidate_sha256(candidate)}")
