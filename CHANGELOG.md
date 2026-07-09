@@ -15,6 +15,8 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
     `10.64.0.0/15` block from the feed.
   - Static redistribution policy renders `match tag 201`; prefix-lists remain
     guardrails and outbound policy objects.
+  - Offline diff support parses current IOS XE prefix-lists and tagged static
+    routes, then renders cleanup candidates for stale `GEOROUTE_RU` routes.
 - Experimental target rendering mode for non-FRR routers:
   - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
   - `--target=iosxe --mode=render` writes deterministic IOS XE `ip prefix-list`

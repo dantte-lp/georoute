@@ -14,6 +14,8 @@
     блок `10.64.0.0/15` из feed.
   - Static redistribution policy рендерит `match tag 201`; prefix-list остаётся
     guardrail и объектом outbound policy.
+  - Offline diff support парсит текущие IOS XE prefix-list и tagged static
+    routes, затем рендерит cleanup-candidate для stale `GEOROUTE_RU` routes.
 - Экспериментальный режим target-rendering для маршрутизаторов вне FRR:
   - `--target=file --mode=render` пишет по одному агрегированному IPv4
     префиксу на строку.
