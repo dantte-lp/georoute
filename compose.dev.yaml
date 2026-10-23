@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Containerfile.dev
-    image: localhost/georoute-dev:go1.26
+    image: localhost/georoute-dev:go1.27.3-trixie
     working_dir: /workspace
     environment:
       CGO_ENABLED: "0"

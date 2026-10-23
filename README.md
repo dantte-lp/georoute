@@ -89,7 +89,7 @@ cost is constant regardless of feed size.
 
 ## Quick start
 
-Build (requires Go ≥ 1.26):
+Build (requires Go ≥ 1.27.3):
 
 ```bash
 make build               # produces ./georoute
