@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,32 +39,37 @@ func TestRefreshLoop_IntervalZero(t *testing.T) {
 // the fake ticker channel.
 func TestRefreshLoop_TicksFire(t *testing.T) {
 	t.Parallel()
-	var count atomic.Int32
-	work := func(context.Context) { count.Add(1) }
-	ch := make(chan time.Time, 4)
-	tf := func(time.Duration) (<-chan time.Time, func()) {
-		return ch, func() {}
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	doneCh := make(chan error, 1)
-	go func() {
-		doneCh <- refreshLoop(ctx, time.Hour, work, tf, slogDiscard(), nil)
-	}()
+	synctest.Test(t, func(t *testing.T) {
+		var count atomic.Int32
+		work := func(context.Context) { count.Add(1) }
+		ch := make(chan time.Time)
+		tf := func(time.Duration) (<-chan time.Time, func()) {
+			return ch, func() {}
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	for range 3 {
-		ch <- time.Now()
-	}
-	// Wait briefly so the goroutine-dispatched work calls land.
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) && count.Load() < 4 {
-		time.Sleep(5 * time.Millisecond)
-	}
-	cancel()
-	<-doneCh
+		doneCh := make(chan error, 1)
+		go func() {
+			doneCh <- refreshLoop(ctx, time.Hour, work, tf, slogDiscard(), nil)
+		}()
 
-	if got := count.Load(); got != 4 {
-		t.Errorf("work invocations = %d, want 4 (1 initial + 3 ticks)", got)
-	}
+		// Each cycle must finish before the next tick; overlaps are intentionally dropped.
+		synctest.Wait()
+		for range 3 {
+			ch <- time.Now()
+			synctest.Wait()
+		}
+		cancel()
+		err := <-doneCh
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+
+		if got := count.Load(); got != 4 {
+			t.Errorf("work invocations = %d, want 4 (1 initial + 3 ticks)", got)
+		}
+	})
 }
 
 // TestRefreshLoop_OverlapSkipped — when a tick fires while the
