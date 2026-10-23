@@ -13,7 +13,7 @@ DEV_IMAGE    ?= localhost/georoute-dev:go1.26
 CONTAINERS_CONF ?= $(CURDIR)/containers.dev.conf
 
 .PHONY: help build install install-systemd uninstall \
-        fmt lint vet test test-race coverage \
+        fmt lint vet vuln test test-race coverage \
         clean ci \
         podman-build podman-test podman-ci podman-shell
 
@@ -49,11 +49,14 @@ lint: ## run golangci-lint v2 (strict)
 vet: ## run go vet
 	go vet ./...
 
+vuln: ## check reachable vulnerabilities with the official Go scanner
+	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
 test: ## run unit tests
 	go test ./...
 
 test-race: ## run unit tests with -race
-	go test -race ./...
+	go test -race -shuffle=on -covermode=atomic ./...
 
 coverage: ## generate coverage profile
 	go test -coverprofile=coverage.out ./...
@@ -63,7 +66,7 @@ coverage: ## generate coverage profile
 clean: ## remove build artifacts
 	rm -f $(BIN) coverage.out coverage.html *.prof
 
-ci: fmt vet lint test ## the exact chain CI runs
+ci: fmt vet lint vuln test-race ## the exact chain CI runs
 
 podman-build: ## build reproducible Podman development image
 	CONTAINERS_CONF=$(CONTAINERS_CONF) $(PODMAN) build -f Containerfile.dev -t $(DEV_IMAGE) .
@@ -86,7 +89,7 @@ podman-ci: podman-build ## run fmt, vet, lint and tests inside the Podman develo
 		-v georoute-go-build-cache:/cache/go-build:Z \
 		-v georoute-go-mod-cache:/cache/go-mod:Z \
 		-w /workspace \
-		-e CGO_ENABLED=0 \
+		-e CGO_ENABLED=1 \
 		-e GOCACHE=/cache/go-build \
 		-e GOMODCACHE=/cache/go-mod \
 		-e GOTOOLCHAIN=local \
