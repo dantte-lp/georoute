@@ -9,7 +9,7 @@ INSTALL_BIN  := /usr/local/bin/$(BIN)
 SYSTEMD_DIR  := /etc/systemd/system
 PODMAN       ?= podman
 COMPOSE_FILE ?= compose.dev.yaml
-DEV_IMAGE    ?= localhost/georoute-dev:go1.26
+DEV_IMAGE    ?= localhost/georoute-dev:go1.27.3-trixie
 CONTAINERS_CONF ?= $(CURDIR)/containers.dev.conf
 
 .PHONY: help build install install-systemd uninstall \

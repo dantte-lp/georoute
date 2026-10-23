@@ -10,6 +10,7 @@ linters:
     # opinionated style I'm intentionally not adopting
     - depguard          # no allowlist policy yet
     - exhaustruct       # zero values are fine
+    - exhaustruct_v5    # same zero-value policy for the renamed linter
     - varnamelen        # short receiver names ok
     - wsl              # forced empty-line rules clash with style
     - wsl_v5

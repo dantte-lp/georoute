@@ -116,7 +116,10 @@ func TestRefreshLoop_OverlapSkipped(t *testing.T) {
 
 	close(release)
 	cancel()
-	<-doneCh
+	err := <-doneCh
+	if err != nil {
+		t.Fatalf("refreshLoop: %v", err)
+	}
 }
 
 // TestRefreshLoop_ContextCancelStops — when ctx is cancelled, the
@@ -183,8 +186,8 @@ func TestRefreshLoop_DrainsInFlightOnCancel(t *testing.T) {
 	cancel()
 	// refreshLoop must NOT return yet — in-flight goroutine is blocked.
 	select {
-	case <-doneCh:
-		t.Fatal("refreshLoop returned before in-flight work finished")
+	case err := <-doneCh:
+		t.Fatalf("refreshLoop returned before in-flight work finished: %v", err)
 	case <-time.After(40 * time.Millisecond):
 	}
 
@@ -219,7 +222,10 @@ func TestRefreshLoop_TickerFactoryStopCalled(t *testing.T) {
 		doneCh <- refreshLoop(ctx, time.Hour, func(context.Context) {}, tf, slogDiscard(), nil)
 	}()
 	cancel()
-	<-doneCh
+	err := <-doneCh
+	if err != nil {
+		t.Fatalf("refreshLoop: %v", err)
+	}
 	if !stopCalled.Load() {
 		t.Error("ticker stop func was not called on exit")
 	}

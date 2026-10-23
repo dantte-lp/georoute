@@ -8,7 +8,7 @@ How to install `georoute` on an exit node from a clean slate.
 - nftables (with firewalld or stand-alone — both work; the `inet pbr` table
   lives independently of firewalld's `inet firewalld`).
 - FRR ≥ 10.1, integrated `frr.conf`, `bgpd` enabled.
-- Go ≥ 1.26 only for building from source; the released binary is static.
+- Go ≥ 1.27.3 only for building from source; the released binary is static.
 - A pre-existing BGP peering with whichever node should receive the country
   prefixes (mesh peer, route reflector, upstream — we don't care, just that
   the route-map is wired up).
