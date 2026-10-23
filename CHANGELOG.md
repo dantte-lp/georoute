@@ -6,12 +6,6 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
-
-- Pin development and CI to Go 1.27.3 and golangci-lint 2.15.0;
-  use Debian Trixie for the development image.
-- Update the Prometheus client to 1.25.0 and pin workflow actions to release commits.
-
 ### Fixed
 - Synchronize refresh-loop tick tests with completed work so intentional overlap
   drops do not produce intermittent CI failures.
@@ -61,6 +55,10 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   compatible target interface.
 
 ### Changed
+
+- Pin development and CI to Go 1.27.3 and golangci-lint 2.15.0;
+  use Debian Trixie for the development image.
+- Update the Prometheus client to 1.25.0 and pin workflow actions to release commits.
 - IOS XE rendering now adds explicit prefix-list and route-map deny tails, making
   generated policy intent visible in router configuration.
 
