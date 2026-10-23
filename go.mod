@@ -1,8 +1,6 @@
 module github.com/dantte-lp/georoute
 
-go 1.26.0
-
-toolchain go1.26.10
+go 1.26.10
 
 require (
 	github.com/AOzhogin/healthcheck v1.3.0
