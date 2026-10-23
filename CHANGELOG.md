@@ -6,6 +6,16 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Synchronize refresh-loop tick tests with completed work so intentional overlap
+  drops do not produce intermittent CI failures.
+
+### Security
+- Build with Go 1.26.10 and golang.org/x/crypto v0.58.0 to address reachable
+  standard-library and SSH vulnerabilities.
+- Run the official govulncheck scanner in CI and `make ci`; keep the race
+  detector enabled in the local CI target.
+
 ### Added
 - Experimental target rendering mode for non-FRR routers:
   - `--target=file --mode=render` writes one aggregated IPv4 prefix per line.
