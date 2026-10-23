@@ -1,13 +1,13 @@
 module github.com/dantte-lp/georoute
 
-go 1.26.0
+go 1.26.10
 
 require (
 	github.com/AOzhogin/healthcheck v1.4.0
 	github.com/google/uuid v1.6.0
-	github.com/prometheus/client_golang v1.23.2
-	golang.org/x/crypto v0.54.0
-	golang.org/x/sys v0.47.0
+	github.com/prometheus/client_golang v1.24.1
+	golang.org/x/crypto v0.58.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
@@ -17,8 +17,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.66.1 // indirect
-	github.com/prometheus/procfs v0.16.1 // indirect
-	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	google.golang.org/protobuf v1.36.8 // indirect
+	github.com/prometheus/common v0.70.1 // indirect
+	github.com/prometheus/procfs v0.21.1 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )
