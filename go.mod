@@ -3,7 +3,7 @@ module github.com/dantte-lp/georoute
 go 1.27.3
 
 require (
-	github.com/AOzhogin/healthcheck v1.4.0
+	github.com/AOzhogin/healthcheck v1.5.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.25.0
 	golang.org/x/crypto v0.58.0
